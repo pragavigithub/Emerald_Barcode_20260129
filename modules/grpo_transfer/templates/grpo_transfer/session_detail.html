@@ -1697,17 +1697,28 @@ function saveItem() {
         return;
     }
 
-    const approvedQty = parseFloat(document.getElementById('editApprovedQty').value) || 0;
-    const rejectedQty = parseFloat(document.getElementById('editRejectedQty').value) || 0;
-    const status = document.getElementById('editStatus').value;
-    const fromWarehouse = document.getElementById('editFromWarehouse').value;
-    const fromBin = document.getElementById('editFromBin').value;
-    const toWarehouse = document.getElementById('editToWarehouse').value;
-    const toBin = document.getElementById('editToBin').value;
-    const rejectedToWarehouse = document.getElementById('editToWarehouses').value;
-    const rejectedToBin = document.getElementById('editToBins').value;
-    const notes = document.getElementById('editNotes').value;
-    const receivedQty = parseFloat(document.getElementById('editApprovedQty').max) || 0;
+    const approvedQtyEl = document.getElementById('editApprovedQty');
+    const rejectedQtyEl = document.getElementById('editRejectedQty');
+    const statusEl = document.getElementById('editStatus');
+    const fromWarehouseEl = document.getElementById('editFromWarehouse');
+    const fromBinEl = document.getElementById('editFromBin');
+    const toWarehouseEl = document.getElementById('editToWarehouse');
+    const toBinEl = document.getElementById('editToBin');
+    const rejectedToWarehouseEl = document.getElementById('editToWarehouses');
+    const rejectedToBinEl = document.getElementById('editToBins');
+    const notesEl = document.getElementById('editNotes');
+
+    const approvedQty = parseFloat(approvedQtyEl?.value) || 0;
+    const rejectedQty = parseFloat(rejectedQtyEl?.value) || 0;
+    const status = statusEl?.value || 'pending';
+    const fromWarehouse = fromWarehouseEl?.value || '';
+    const fromBin = fromBinEl?.value || '';
+    const toWarehouse = toWarehouseEl?.value || '';
+    const toBin = toBinEl?.value || '';
+    const rejectedToWarehouse = rejectedToWarehouseEl?.value || '';
+    const rejectedToBin = rejectedToBinEl?.value || '';
+    const notes = notesEl?.value || '';
+    const receivedQty = parseFloat(approvedQtyEl?.max) || 0;
 
     // Validation
     const errors = [];
