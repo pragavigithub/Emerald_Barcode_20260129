@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Create Direct Inventory Transfer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Create Direct Inventory Transfer</h1>
+        <a href="{{ url_for('direct_inventory_transfer.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <!-- Step 1: Warehouse and Bin Selection -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 >
+                <i class="fas fa-warehouse"></i> Step 1: Choose Warehouses and Bin Locations
+            </h6>
+        </div>
+        <div class="card-body">
+            <form id="createTransferForm">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="from_warehouse" class="form-label">From Warehouse <span class="text-danger">*</span></label>
+                        <select class="form-select" id="from_warehouse" name="from_warehouse" required>
+                            <option value="">Select From Warehouse</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="from_bin" class="form-label">From Bin Location</label>
+                        <select class="form-select" id="from_bin" name="from_bin">
+                            <option value="">Select From Bin (Optional)</option>
+                        </select>
+                        <small class="text-muted">Select warehouse first to load bin locations</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="to_warehouse" class="form-label">To Warehouse <span class="text-danger">*</span></label>
+                        <select class="form-select" id="to_warehouse" name="to_warehouse" required>
+                            <option value="">Select To Warehouse</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="to_bin" class="form-label">To Bin Location</label>
+                        <select class="form-select" id="to_bin" name="to_bin">
+                            <option value="">Select To Bin (Optional)</option>
+                        </select>
+                        <small class="text-muted">Select warehouse first to load bin locations</small>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea class="form-control" id="notes" name="notes" rows="3" 
+                              placeholder="Enter any notes or comments for this transfer"></textarea>
+                </div>
+
+                <div class="text-end">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus"></i> Create Transfer Document
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-info">
+                <i class="fas fa-info-circle"></i> Workflow Guide
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-primary">Step 1: Document Creation</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success"></i> Choose From Warehouse</li>
+                        <li><i class="fas fa-check text-success"></i> Select From Bin (based on warehouse)</li>
+                        <li><i class="fas fa-check text-success"></i> Choose To Warehouse</li>
+                        <li><i class="fas fa-check text-success"></i> Select To Bin (based on warehouse)</li>
+                        <li><i class="fas fa-check text-success"></i> Create transfer document</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-warning">Step 2: Serial Number Entry</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-arrow-right text-warning"></i> Enter serial numbers one by one</li>
+                        <li><i class="fas fa-arrow-right text-warning"></i> System validates each serial</li>
+                        <li><i class="fas fa-arrow-right text-warning"></i> Add serials to Transfer Items List</li>
+                        <li><i class="fas fa-arrow-right text-warning"></i> Submit for QC Approval</li>
+                        <li><i class="fas fa-arrow-right text-warning"></i> Document ready to Transfer</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Direct Transfer Create Page Loaded');
+    
+    // Load warehouses on page load
+    loadWarehouses();
+
+    // Form submission
+    document.getElementById('createTransferForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        createTransferDocument();
+    });
+
+    // Warehouse change events to load bins
+    document.getElementById('from_warehouse').addEventListener('change', function() {
+        const warehouseCode = this.value;
+        if (warehouseCode) {
+            loadBinLocations(warehouseCode, 'from_bin');
+        } else {
+            clearBinOptions('from_bin');
+        }
+    });
+
+    document.getElementById('to_warehouse').addEventListener('change', function() {
+        const warehouseCode = this.value;
+        if (warehouseCode) {
+            loadBinLocations(warehouseCode, 'to_bin');
+        } else {
+            clearBinOptions('to_bin');
+        }
+    });
+});
+
+function loadWarehouses() {
+    console.log('Loading warehouses...');
+    fetch('/direct-inventory-transfer/api/get-warehouses')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Warehouse response:', data);
+            if (data.success) {
+                const fromSelect = document.getElementById('from_warehouse');
+                const toSelect = document.getElementById('to_warehouse');
+                const warehouses = data.warehouses || data.value || [];
+                
+                // Clear existing options
+                fromSelect.innerHTML = '<option value="">Select From Warehouse</option>';
+                toSelect.innerHTML = '<option value="">Select To Warehouse</option>';
+                
+                warehouses.forEach(wh => {
+                    const code = wh.WarehouseCode || wh.WhsCode || wh.Code;
+                    const name = wh.WarehouseName || wh.WhsName || wh.Name;
+                    const optionText = `${name} (${code})`;
+                    
+                    fromSelect.add(new Option(optionText, code));
+                    toSelect.add(new Option(optionText, code));
+                });
+                
+                console.log(`Loaded ${warehouses.length} warehouses`);
+            } else {
+                console.error('Failed to load warehouses:', data);
+                showAlert('danger', 'Failed to load warehouses: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error loading warehouses:', error);
+            showAlert('danger', 'Error loading warehouses: ' + error.message);
+        });
+}
+
+function loadBinLocations(warehouseCode, selectId) {
+    const binSelect = document.getElementById(selectId);
+    const isFromBin = selectId === 'from_bin';
+    
+    binSelect.innerHTML = '<option value="">Loading bins...</option>';
+    binSelect.disabled = true;
+
+    console.log('Loading bins for warehouse:', warehouseCode);
+    fetch(`/direct-inventory-transfer/api/get-bin-locations?warehouse_code=${encodeURIComponent(warehouseCode)}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Bin response:', data);
+            
+            const defaultText = isFromBin ? 'Select From Bin (Optional)' : 'Select To Bin (Optional)';
+            binSelect.innerHTML = `<option value="">${defaultText}</option>`;
+            
+            const bins = data.bins || data.value || [];
+            if (data.success && bins.length > 0) {
+                bins.forEach(bin => {
+                    const option = new Option(bin.BinCode, bin.BinCode);
+                    binSelect.add(option);
+                });
+                console.log(`Loaded ${bins.length} bins for ${warehouseCode}`);
+                showAlert('info', `Loaded ${bins.length} bin locations for ${warehouseCode}`);
+            } else {
+                console.log('No bins found for warehouse:', warehouseCode);
+                showAlert('info', `No bin locations found for warehouse ${warehouseCode}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading bins:', error);
+            binSelect.innerHTML = `<option value="">Error loading bins</option>`;
+            showAlert('warning', 'Error loading bin locations: ' + error.message);
+        })
+        .finally(() => {
+            binSelect.disabled = false;
+        });
+}
+
+function clearBinOptions(selectId) {
+    const binSelect = document.getElementById(selectId);
+    const isFromBin = selectId === 'from_bin';
+    const defaultText = isFromBin ? 'Select From Bin (Optional)' : 'Select To Bin (Optional)';
+    binSelect.innerHTML = `<option value="">${defaultText}</option>`;
+}
+
+function createTransferDocument() {
+    const formData = new FormData(document.getElementById('createTransferForm'));
+    
+    // Validate required fields
+    const fromWarehouse = formData.get('from_warehouse');
+    const toWarehouse = formData.get('to_warehouse');
+    
+    if (!fromWarehouse || !toWarehouse) {
+        showAlert('warning', 'Please select both From and To warehouses');
+        return;
+    }
+    
+    if (fromWarehouse === toWarehouse) {
+        showAlert('warning', 'From and To warehouses must be different');
+        return;
+    }
+
+    // Show loading state
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Document...';
+    submitBtn.disabled = true;
+
+    fetch('/direct-inventory-transfer/create', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            // Follow the redirect to the detail page
+            window.location.href = response.url;
+        } else {
+            return response.json().then(data => {
+                if (data.success) {
+                    showAlert('success', data.message || 'Transfer document created successfully');
+                    // Redirect to detail page for Step 2
+                    setTimeout(() => {
+                        window.location.href = `/direct-inventory-transfer/${data.transfer_id}`;
+                    }, 1500);
+                } else {
+                    showAlert('danger', data.error || 'Error creating transfer document');
+                }
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error creating transfer:', error);
+        showAlert('danger', 'Error creating transfer document: ' + error.message);
+    })
+    .finally(() => {
+        // Reset button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.top = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

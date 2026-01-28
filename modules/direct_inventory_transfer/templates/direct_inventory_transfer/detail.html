@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block title %}Direct Inventory Transfer - {{ transfer.transfer_number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Direct Inventory Transfer</h1>
+            <p class="text-muted">{{ transfer.transfer_number }}</p>
+        </div>
+        <a href="{{ url_for('direct_inventory_transfer.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <!-- Transfer Info -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Transfer Document Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>From Warehouse:</strong> <span class="badge bg-info">{{ transfer.from_warehouse }}</span></p>
+                            <p><strong>To Warehouse:</strong> <span class="badge bg-success">{{ transfer.to_warehouse }}</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if transfer.from_bin %}
+                            <p><strong>From Bin:</strong> <span class="badge bg-secondary">{{ transfer.from_bin }}</span></p>
+                            {% endif %}
+                            {% if transfer.to_bin %}
+                            <p><strong>To Bin:</strong> <span class="badge bg-secondary">{{ transfer.to_bin }}</span></p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if transfer.notes %}
+                    <p><strong>Notes:</strong> {{ transfer.notes }}</p>
+                    {% endif %}
+                    <p><strong>Created:</strong> {{ transfer.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-line"></i> Status & Progress
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Status:</strong>
+                        {% if transfer.status == 'draft' %}
+                            <span class="badge bg-secondary">Draft - Adding Serials</span>
+                        {% elif transfer.status == 'submitted' %}
+                            <span class="badge bg-warning">Submitted for QC</span>
+                        {% elif transfer.status == 'qc_approved' %}
+                            <span class="badge bg-success">QC Approved</span>
+                        {% elif transfer.status == 'posted' %}
+                            <span class="badge bg-primary">Posted to SAP</span>
+                        {% elif transfer.status == 'rejected' %}
+                            <span class="badge bg-danger">Rejected</span>
+                        {% endif %}
+                    </p>
+                    <p><strong>Total Items:</strong> {{ transfer.items|length }}</p>
+                    <p><strong>Total Serials:</strong> 
+                        {% set total_serials = transfer.items|sum(attribute='quantity') %}
+                        <span class="badge bg-info">{{ total_serials|int }}</span>
+                    </p>
+                    {% if transfer.sap_document_number %}
+                    <p><strong>SAP Document:</strong> <span class="badge bg-primary">{{ transfer.sap_document_number }}</span></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Add Serial Numbers (only for draft status) -->
+    {% if transfer.status == 'draft' %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="mb-0">
+                <i class="fas fa-list"></i> Step 2: Enter Serial Numbers One by One
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <form id="addSerialForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="serial_number" class="form-label">Serial Number <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="serial_number" name="serial_number" 
+                                           placeholder="Scan or enter serial number" autofocus required>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-plus"></i> Add Serial
+                                    </button>
+                                </div>
+                                <small class="text-muted">System will validate serial and add to transfer items list</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Last Added Serial Info</label>
+                                <div id="lastSerialInfo" class="form-control bg-light" style="min-height: 38px;">
+                                    <span class="text-muted">No serials added yet</span>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Quick Stats</h6>
+                            <p class="mb-1"><strong>Items:</strong> <span id="itemCount">{{ transfer.items|length }}</span></p>
+                            <p class="mb-1"><strong>Serials:</strong> <span id="serialCount">{{ transfer.items|sum(attribute='quantity')|int }}</span></p>
+                            {% if transfer.items %}
+                            <button type="button" class="btn btn-success btn-sm mt-2" onclick="submitForQC()">
+                                <i class="fas fa-check-circle"></i> Submit for QC
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Items Table -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-list"></i> Transfer Items List
+            </h6>
+            {% if transfer.status == 'draft' and transfer.items %}
+            <button type="button" class="btn btn-warning btn-sm" onclick="submitForQC()">
+                <i class="fas fa-check-circle"></i> Submit for QC Approval
+            </button>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if transfer.items %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" width="100%">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Item Code</th>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                            <th>Serial Numbers</th>
+                            <th>Validation</th>
+                            <th>QC Status</th>
+                            {% if transfer.status == 'draft' %}
+                            <th>Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody id="itemsTableBody">
+                        {% for item in transfer.items %}
+                        {% set sns = (item.serial_numbers|from_json) if item.item_type == 'serial' and item.serial_numbers else [] %}
+                        <tr id="item-{{ item.id }}">
+                            <td><strong>{{ item.item_code }}</strong></td>
+                            <td>{{ item.item_description }}</td>
+                            <td>
+                                <span class="badge bg-primary">{{ item.quantity|int }} Serial(s)</span>
+                            </td>
+                            <td>
+                                {% if sns %}
+                                    <div class="d-flex align-items-center">
+                                        <button type="button" class="btn btn-sm btn-info rounded-pill me-2 px-3" 
+                                                onclick="viewSerials('{{ item.item_code }}', {{ sns|tojson|safe }})">
+                                            {{ sns[0] }}
+                                            {% if sns|length > 1 %}
+                                                <span class="ms-1 fw-bold">(+{{ sns|length - 1 }})</span>
+                                            {% endif %}
+                                        </button>
+                                        <span class="badge bg-light text-dark border">{{ sns|length }} serial(s)</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">No serials</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.validation_status == 'validated' %}
+                                    <span class="badge bg-success"><i class="fas fa-check"></i> Validated</span>
+                                {% else %}
+                                    <span class="badge bg-danger"><i class="fas fa-times"></i> Failed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.qc_status == 'pending' %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% elif item.qc_status == 'approved' %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% elif item.qc_status == 'rejected' %}
+                                    <span class="badge bg-danger">Rejected</span>
+                                {% endif %}
+                            </td>
+                            {% if transfer.status == 'draft' %}
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})">
+                                    <i class="fas fa-trash"></i> Remove
+                                </button>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-barcode fa-3x text-gray-300 mb-3"></i>
+                <h5 class="text-muted">No Serial Numbers Added Yet</h5>
+                <p class="text-muted">Start by entering serial numbers one by one in the form above.</p>
+                {% if transfer.status == 'draft' %}
+                <p class="text-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Each serial number will be validated and added to the transfer items list.
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- QC Notes (if rejected or approved) -->
+    {% if transfer.qc_notes %}
+    <div class="card shadow mt-4">
+        <div class="card-header py-3">
+            <h6 class="mb-0">
+                <i class="fas fa-comment"></i> QC Notes
+            </h6>
+        </div>
+        <div class="card-body">
+            <p>{{ transfer.qc_notes }}</p>
+            {% if transfer.qc_approved_at %}
+            <small class="text-muted">
+                QC reviewed on {{ transfer.qc_approved_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% if transfer.qc_approver %}by {{ transfer.qc_approver.username }}{% endif %}
+            </small>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Serials Modal -->
+<div class="modal fade" id="serialsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="serialsModalTitle">Serial Numbers</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="serialsModalList" class="d-flex flex-wrap gap-2">
+                    <!-- Serials will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const transferId = {{ transfer.id }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Focus on serial input if in draft mode
+    {% if transfer.status == 'draft' %}
+    document.getElementById('serial_number').focus();
+    {% endif %}
+
+    // Add serial form submission
+    document.getElementById('addSerialForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        addSerial();
+    });
+});
+
+function addSerial() {
+    const serialInput = document.getElementById('serial_number');
+    const serial = serialInput.value.trim();
+    
+    if (!serial) {
+        showAlert('warning', 'Please enter a serial number');
+        return;
+    }
+
+    // Show loading state
+    const submitBtn = document.querySelector('#addSerialForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+    submitBtn.disabled = true;
+
+    // Send request to add serial
+    fetch(`/direct-inventory-transfer/${transferId}/add_serial`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            serial_number: serial
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            
+            // Update last serial info
+            document.getElementById('lastSerialInfo').innerHTML = `
+                <strong>${data.item_code}</strong> - ${data.item_description}<br>
+                <small class="text-muted">Location: ${data.current_location}</small>
+            `;
+            
+            // Clear input and focus
+            serialInput.value = '';
+            serialInput.focus();
+            
+            // Reload page to show updated items
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showAlert('danger', data.error || 'Error adding serial number');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', 'Error connecting to server');
+    })
+    .finally(() => {
+        // Reset button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+function deleteItem(itemId) {
+    if (!confirm('Are you sure you want to remove this item and all its serial numbers?')) {
+        return;
+    }
+
+    fetch(`/direct-inventory-transfer/items/${itemId}/delete`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            document.getElementById(`item-${itemId}`).remove();
+            
+            // Update counts
+            updateCounts();
+        } else {
+            showAlert('danger', data.error || 'Error removing item');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', 'Error removing item');
+    });
+}
+
+function submitForQC() {
+    if (!confirm('Are you sure you want to submit this transfer for QC approval?\n\nOnce submitted, you cannot add more serial numbers.')) {
+        return;
+    }
+
+    fetch(`/direct-inventory-transfer/${transferId}/submit_for_qc`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert('danger', data.error || 'Error submitting for QC');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', 'Error submitting for QC');
+    });
+}
+
+function viewSerials(itemCode, serials) {
+    console.log('viewSerials called for:', itemCode, serials);
+    document.getElementById('serialsModalTitle').innerText = `Serial Numbers for ${itemCode}`;
+    const listContainer = document.getElementById('serialsModalList');
+    listContainer.innerHTML = '';
+    
+    if (typeof serials === 'string') {
+        try {
+            serials = JSON.parse(serials);
+        } catch (e) {
+            serials = serials.split(',').map(s => s.trim());
+        }
+    }
+    
+    if (Array.isArray(serials)) {
+        serials.forEach((sn, index) => {
+            const span = document.createElement('span');
+            span.className = 'badge bg-info p-2 me-1 mb-1';
+            span.innerText = `${index + 1}. ${sn}`;
+            listContainer.appendChild(span);
+        });
+    } else {
+        const span = document.createElement('span');
+        span.className = 'badge bg-info p-2';
+        span.innerText = serials;
+        listContainer.appendChild(span);
+    }
+    
+    const modalElement = document.getElementById('serialsModal');
+    let modal = bootstrap.Modal.getInstance(modalElement);
+    if (!modal) {
+        modal = new bootstrap.Modal(modalElement);
+    }
+    modal.show();
+}
+
+function updateCounts() {
+    // Update item and serial counts
+    const itemRows = document.querySelectorAll('#itemsTableBody tr');
+    document.getElementById('itemCount').textContent = itemRows.length;
+    
+    let totalSerials = 0;
+    itemRows.forEach(row => {
+        const quantityBadge = row.querySelector('.badge.bg-primary');
+        if (quantityBadge) {
+            const qty = parseInt(quantityBadge.textContent.match(/\d+/)[0]);
+            totalSerials += qty;
+        }
+    });
+    document.getElementById('serialCount').textContent = totalSerials;
+}
+
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.top = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

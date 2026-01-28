@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}QC Validation - {{ session.session_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i data-feather="check-square"></i> QC Validation: {{ session.session_code }}</h2>
+                <div>
+                    <a href="{{ url_for('grpo_transfer.session_detail', session_id=session.id) }}" class="btn btn-secondary">
+                        <i data-feather="arrow-left"></i> Back to Session
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">Document: {{ session.grpo_doc_num }} | Vendor: {{ session.vendor_name }}</p>
+        </div>
+    </div>
+
+    <form id="qcValidationForm">
+        {% for item in session.items %}
+        <div class="card mb-4 qc-item-card" data-item-id="{{ item.id }}">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i data-feather="package"></i> {{ item.item_code }} - {{ item.item_name }}
+                    <span class="badge bg-info ms-2">Rec: {{ item.received_quantity }}</span>
+                </h6>
+                <div class="qc-status-badge">
+                    <span class="badge bg-{{ 'success' if item.qc_status == 'approved' else 'warning' if item.qc_status == 'pending' else 'danger' }}">
+                        {{ item.qc_status|title }}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Approved Quantity</label>
+                        <input type="number" step="any" class="form-control approved-qty" name="approved_qty_{{ item.id }}" 
+                               value="{{ item.approved_quantity or item.received_quantity }}" max="{{ item.received_quantity }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rejected Quantity</label>
+                        <input type="number" step="any" class="form-control rejected-qty" name="rejected_qty_{{ item.id }}" 
+                               value="{{ item.rejected_quantity or 0 }}" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Target Warehouse</label>
+                        <select class="form-select to-warehouse" name="to_warehouse_{{ item.id }}" required>
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Target Bin</label>
+                        <select class="form-select to-bin" name="to_bin_{{ item.id }}" required>
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label">QC Notes</label>
+                    <textarea class="form-control qc-notes" name="notes_{{ item.id }}" rows="2">{{ item.qc_notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-5">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i data-feather="save"></i> Save QC Validation
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadWarehouses();
+    
+    // Auto-calculate rejected quantity
+    document.querySelectorAll('.approved-qty').forEach(input => {
+        input.addEventListener('input', function() {
+            const card = this.closest('.qc-item-card');
+            const recQty = parseFloat(card.querySelector('.badge.bg-info').textContent.replace('Rec: ', ''));
+            const appQty = parseFloat(this.value) || 0;
+            card.querySelector('.rejected-qty').value = (recQty - appQty).toFixed(2);
+        });
+    });
+
+    // Handle warehouse change
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('to-warehouse')) {
+            const whCode = e.target.value;
+            const binSelect = e.target.closest('.row').querySelector('.to-bin');
+            if (whCode) {
+                loadBins(whCode, binSelect);
+            } else {
+                binSelect.innerHTML = '<option value="">-- Select --</option>';
+            }
+        }
+    });
+
+    // Form submission
+    document.getElementById('qcValidationForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const items = [];
+        document.querySelectorAll('.qc-item-card').forEach(card => {
+            items.push({
+                item_id: card.dataset.itemId,
+                approved_quantity: parseFloat(card.querySelector('.approved-qty').value),
+                rejected_quantity: parseFloat(card.querySelector('.rejected-qty').value),
+                to_warehouse: card.querySelector('.to-warehouse').value,
+                to_bin_code: card.querySelector('.to-bin').value,
+                qc_notes: card.querySelector('.qc-notes').value,
+                qc_status: 'approved'
+            });
+        });
+
+        fetch(`/grpo-transfer/api/session/{{ session.id }}/qc-approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: items })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('QC Validation Saved Successfully');
+                window.location.href = "{{ url_for('grpo_transfer.session_detail', session_id=session.id) }}";
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    });
+});
+
+function loadWarehouses() {
+    fetch('/grpo-transfer/api/warehouses')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.querySelectorAll('.to-warehouse').forEach(select => {
+                    data.warehouses.forEach(wh => {
+                        const option = document.createElement('option');
+                        option.value = wh.WarehouseCode;
+                        option.textContent = `${wh.WarehouseName} (${wh.WarehouseCode})`;
+                        select.appendChild(option);
+                    });
+                });
+            }
+        });
+}
+
+function loadBins(whCode, select) {
+    fetch(`/grpo-transfer/api/bin-locations/${whCode}`)
+        .then(r => r.json())
+        .then(data => {
+            select.innerHTML = '<option value="">-- Select --</option>';
+            if (data.success) {
+                data.bins.forEach(bin => {
+                    const option = document.createElement('option');
+                    option.value = bin.BinCode;
+                    option.textContent = bin.BinCode;
+                    select.appendChild(option);
+                });
+            }
+        });
+}
+</script>
+{% endblock %}

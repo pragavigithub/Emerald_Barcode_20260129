@@ -1,0 +1,1793 @@
+{% extends "base.html" %}
+
+{% block title %}GRPO Transfer Session - {{ session.session_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i data-feather="truck"></i> Transfer Session</h2>
+                    <p class="text-muted">{{ session.session_code }}</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('grpo_transfer.index') }}" class="btn btn-secondary">
+                        <i data-feather="arrow-left"></i> Back
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Info -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">GRPO Document Details</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <p class="text-muted small">Document Number</p>
+                            <p><strong>{{ session.grpo_doc_num }}</strong></p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">Vendor</p>
+                            <p><strong>{{ session.vendor_name }}</strong></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <p class="text-muted small">Document Date</p>
+                            <p><strong>{{ session.doc_date.strftime('%Y-%m-%d') }}</strong></p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">Total Amount</p>
+                            <p><strong>{{ "%.2f"|format(session.doc_total) }}</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">Session Status</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <p class="text-muted small">Status</p>
+                            <p>
+                                {% if session.status == 'draft' %}
+                                    <span class="badge bg-secondary">Draft</span>
+                                {% elif session.status == 'in_progress' %}
+                                    <span class="badge bg-warning text-dark">In Progress</span>
+                                {% elif session.status == 'completed' %}
+                                    <span class="badge bg-success">Completed</span>
+                                {% elif session.status == 'transferred' %}
+                                    <span class="badge bg-info">Transferred</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">Items</p>
+                            <p><strong>{{ session.items|length }}</strong></p>
+                        </div>
+                    </div>
+                    {% if session.transfer_doc_num %}
+                    <div class="row">
+                        <div class="col-12">
+                            <p class="text-muted small">SAP Transfer Document</p>
+                            <p><strong>{{ session.transfer_doc_num }}</strong></p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="items-tab" data-bs-toggle="tab" data-bs-target="#items" type="button" role="tab">
+                <i data-feather="list"></i> Items ({{ session.items|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="qc-tab" data-bs-toggle="tab" data-bs-target="#qc" type="button" role="tab">
+                <i data-feather="check-circle"></i> QC Validation
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="labels-tab" data-bs-toggle="tab" data-bs-target="#labels" type="button" role="tab">
+                <i data-feather="tag"></i> QR Labels
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button" role="tab">
+                <i data-feather="activity"></i> Audit Log
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        <!-- Items Tab -->
+        <div class="tab-pane fade show active" id="items" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Line Items</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Item Code</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Received</th>
+                                    <th>Approved</th>
+                                    <th>Rejected</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in session.items %}
+                                <tr>
+                                    <td><strong>{{ item.item_code }}</strong></td>
+                                    <td>{{ item.item_name }}</td>
+                                    <td>
+                                        {% if item.is_batch_item %}
+                                            <span class="badge bg-primary">Batch</span>
+                                        {% elif item.is_serial_item %}
+                                            <span class="badge bg-success">Serial</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Non-Managed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.received_quantity }}</td>
+                                    <td>{{ item.approved_quantity }}</td>
+                                    <td>{{ item.rejected_quantity }}</td>
+                                    <td>
+                                        {% if item.qc_status == 'pending' %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        {% elif item.qc_status == 'approved' %}
+                                            <span class="badge bg-success">Approved</span>
+                                        {% elif item.qc_status == 'rejected' %}
+                                            <span class="badge bg-danger">Rejected</span>
+                                        {% elif item.qc_status == 'partial' %}
+                                            <span class="badge bg-info">Partial</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="editItem({{ item.id }})">
+                                            <i data-feather="edit"></i>Edit
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QC Validation Tab -->
+        <div class="tab-pane fade" id="qc" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">QC Validation & Approval</h6>
+                </div>
+                <div class="card-body">
+                    <form id="qcForm">
+                        <div id="qcItemsContainer"></div>
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-success">
+                                <i data-feather="check"></i> Submit QC Approval
+                            </button>
+                            <button type="reset" class="btn btn-secondary">
+                                <i data-feather="refresh-cw"></i> Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR Labels Tab -->
+        <div class="tab-pane fade" id="labels" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Generated QR Labels</h6>
+                        <button class="btn btn-sm btn-primary" id="generateLabelsBtn">
+                            <i data-feather="plus"></i> Generate Labels
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="labelsContainer" class="row"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit Log Tab -->
+        <div class="tab-pane fade" id="logs" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Activity Log</h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        {% for log in session.logs %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker {% if log.status == 'success' %}bg-success{% elif log.status == 'error' %}bg-danger{% else %}bg-warning{% endif %}"></div>
+                            <div class="timeline-content">
+                                <h6>{{ log.action|title }}</h6>
+                                <p class="text-muted small">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                                <p>{{ log.description }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="d-flex gap-2">
+                {% if session.status == 'draft' or session.status == 'in_progress' %}
+                <button class="btn btn-success" id="submitQCBtn">
+                    <i data-feather="check-circle"></i> Submit QC Approval
+                </button>
+                {% endif %}
+
+                {% if session.status == 'completed' %}
+                <button class="btn btn-primary" id="postTransferBtn">
+                    <i data-feather="send"></i> Post to SAP B1
+                </button>
+                {% endif %}
+
+                {% if session.status == 'transferred' %}
+                <button class="btn btn-info" id="printLabelsBtn">
+                    <i data-feather="printer"></i> Print Labels
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Item Edit Modal -->
+<div class="modal fade" id="itemEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="itemEditContent">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveItemBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pack Configuration Modal -->
+<div class="modal fade" id="packConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configure Label Packs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="packConfigContent">
+                    <!-- Content loaded dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="generateWithPacksBtn">Generate Labels</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transfer Preview Modal -->
+<div class="modal fade" id="transferPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Transfer Preview - Review Before Posting to SAP B1</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="transferPreviewContent">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmTransferBtn">
+                    <i data-feather="check"></i> Confirm & Post to SAP B1
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline {
+    position: relative;
+    padding: 20px 0;
+}
+
+.timeline-item {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-right: 20px;
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+
+.timeline-content {
+    flex: 1;
+}
+</style>
+
+<script>
+const sessionId = {{ session.id }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Build QC form dynamically
+    buildQCForm();
+
+    // Event listeners for buttons
+    const submitQCBtn = document.getElementById('submitQCBtn');
+    const postTransferBtn = document.getElementById('postTransferBtn');
+    const generateLabelsBtn = document.getElementById('generateLabelsBtn');
+    const printLabelsBtn = document.getElementById('printLabelsBtn');
+
+    if (submitQCBtn) submitQCBtn.addEventListener('click', submitQCApproval);
+    if (postTransferBtn) postTransferBtn.addEventListener('click', postTransfer);
+    if (generateLabelsBtn) generateLabelsBtn.addEventListener('click', generateLabels);
+    if (printLabelsBtn) printLabelsBtn.addEventListener('click', printLabels);
+
+    // Load labels when QR Labels tab is clicked
+    const labelsTab = document.getElementById('labels-tab');
+    if (labelsTab) {
+        labelsTab.addEventListener('shown.bs.tab', function() {
+            loadLabelsForDisplay();
+        });
+    }
+});
+
+// QC Items are loaded dynamically from the form
+// Warehouse dropdowns are populated in edit modal only
+
+function buildQCForm() {
+    const container = document.getElementById('qcItemsContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Get items from the items_json variable passed from backend
+    const items = {{ items_json|tojson }};
+
+    items.forEach(item => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'card mb-3';
+        itemCard.innerHTML = `
+            <div class="card-header">
+                <h6 class="mb-0">${item.item_code} - ${item.item_name}</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Received Qty</label>
+                        <input type="text" class="form-control" value="${item.received_quantity}" disabled>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Approved Qty</label>
+                        <input type="number" class="form-control" name="approved_qty_${item.id}" value="${item.approved_quantity || 0}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rejected Qty</label>
+                        <input type="number" class="form-control" name="rejected_qty_${item.id}" value="${item.rejected_quantity || 0}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status_${item.id}">
+                            <option value="pending" ${item.qc_status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="approved" ${item.qc_status === 'approved' ? 'selected' : ''}>Approved</option>
+                            <option value="rejected" ${item.qc_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                            <option value="partial" ${item.qc_status === 'partial' ? 'selected' : ''}>Partial</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label">From Warehouse</label>
+                        <select class="form-select" name="from_warehouse_${item.id}" data-initial-value="${item.from_warehouse || ''}">
+                            <option value="">-- Select Warehouse --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">From Bin Code</label>
+                        <select class="form-select" name="from_bin_${item.id}" data-initial-value="${item.from_bin_code || ''}">
+                            <option value="">-- Select Bin --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label">To Warehouse</label>
+                        <select class="form-select" name="to_warehouse_${item.id}" data-initial-value="${item.to_warehouse || ''}">
+                            <option value="">-- Select Warehouse --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">To Bin Code</label>
+                        <select class="form-select" name="to_bin_${item.id}" data-initial-value="${item.to_bin_code || ''}">
+                            <option value="">-- Select Bin --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <label class="form-label">QC Notes</label>
+                        <textarea class="form-control" name="notes_${item.id}" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(itemCard);
+    });
+
+    // Load warehouses for all warehouse dropdowns
+    loadWarehousesForQC();
+}
+
+function loadWarehousesForQC() {
+    fetch('/grpo-transfer/api/warehouses')
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.warehouses) {
+                // Update all warehouse dropdowns in QC form (both from and to)
+                document.querySelectorAll('select[name^="from_warehouse_"], select[name^="to_warehouse_"]').forEach(select => {
+                    const initialValue = select.dataset.initialValue || select.value;
+                    select.innerHTML = '<option value="">-- Select Warehouse --</option>';
+
+                    data.warehouses.forEach(wh => {
+                        const option = document.createElement('option');
+                        option.value = wh.WarehouseCode;
+                        option.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                        if (wh.WarehouseCode === initialValue) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+
+                    // Add change listener for bin codes
+                    select.addEventListener('change', function() {
+                        const itemId = this.name.match(/\d+/)[0];
+                        const binSelectName = this.name.includes('from_warehouse') ? `from_bin_${itemId}` : `to_bin_${itemId}`;
+                        loadBinCodesForQC(this.value, binSelectName);
+                    });
+
+                    // Load bins if warehouse is pre-selected
+                    if (initialValue) {
+                        const itemId = select.name.match(/\d+/)[0];
+                        const binSelectName = select.name.includes('from_warehouse') ? `from_bin_${itemId}` : `to_bin_${itemId}`;
+                        loadBinCodesForQC(initialValue, binSelectName);
+                    }
+                });
+            }
+        })
+        .catch(error => console.error('Error loading warehouses:', error));
+}
+
+function loadBinCodesForQC(warehouseCode, binSelectName) {
+    if (!warehouseCode) return;
+
+    const binSelect = document.querySelector(`select[name="${binSelectName}"]`);
+    if (!binSelect) return;
+
+    const initialValue = binSelect.dataset.initialValue || '';
+
+    // Use the endpoint that returns AbsEntry values
+    fetch(`/grpo-transfer/api/bin-codes-with-entry/${warehouseCode}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.bins) {
+                binSelect.innerHTML = '<option value="">-- Select Bin --</option>';
+
+                data.bins.forEach(bin => {
+                    const option = document.createElement('option');
+                    option.value = bin.bin_code;
+                    option.textContent = bin.bin_code;
+                    option.dataset.absEntry = bin.abs_entry;  // ✅ NEW: Store AbsEntry as data attribute
+                    if (bin.bin_code === initialValue) {
+                        option.selected = true;
+                    }
+                    binSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading bin codes:', error));
+}
+
+function submitQCApproval() {
+    const items = [];
+
+    // Collect form data from all item cards dynamically
+    const itemCards = document.querySelectorAll('#qcItemsContainer .card');
+
+    if (itemCards.length === 0) {
+        alert('No items to approve');
+        return;
+    }
+
+    itemCards.forEach((card, index) => {
+        const approvedQtyInput = card.querySelector('input[name^="approved_qty_"]');
+        const rejectedQtyInput = card.querySelector('input[name^="rejected_qty_"]');
+        const statusSelect = card.querySelector('select[name^="status_"]');
+        const fromWarehouseSelect = card.querySelector('select[name^="from_warehouse_"]');
+        const fromBinSelect = card.querySelector('select[name^="from_bin_"]');
+        const toWarehouseSelect = card.querySelector('select[name^="to_warehouse_"]');
+        const toBinSelect = card.querySelector('select[name^="to_bin_"]');
+        const notesTextarea = card.querySelector('textarea[name^="notes_"]');
+
+        if (approvedQtyInput && statusSelect) {
+            const itemId = parseInt(approvedQtyInput.name.match(/\d+/)[0]);
+
+            // ✅ NEW: Get AbsEntry values from selected options
+            const fromBinAbsEntry = fromBinSelect?.options[fromBinSelect.selectedIndex]?.dataset?.absEntry || null;
+            const toBinAbsEntry = toBinSelect?.options[toBinSelect.selectedIndex]?.dataset?.absEntry || null;
+
+            items.push({
+                item_id: itemId,
+                approved_quantity: parseFloat(approvedQtyInput.value) || 0,
+                rejected_quantity: parseFloat(rejectedQtyInput?.value) || 0,
+                qc_status: statusSelect.value,
+                from_warehouse: fromWarehouseSelect?.value || '',
+                from_bin_code: fromBinSelect?.value || '',
+                from_bin_abs_entry: fromBinAbsEntry ? parseInt(fromBinAbsEntry) : null,  // ✅ NEW
+                to_warehouse: toWarehouseSelect?.value || '',
+                to_bin_code: toBinSelect?.value || '',
+                to_bin_abs_entry: toBinAbsEntry ? parseInt(toBinAbsEntry) : null,  // ✅ NEW
+                qc_notes: notesTextarea?.value || ''
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        alert('No items found to approve');
+        return;
+    }
+
+    // Validate that at least one item is approved
+    const hasApproved = items.some(item => item.qc_status === 'approved' && item.approved_quantity > 0);
+    if (!hasApproved) {
+        alert('Please approve at least one item');
+        return;
+    }
+
+    // Show loading state
+    const submitBtn = document.getElementById('submitQCBtn');
+    const originalText = submitBtn?.innerHTML || 'Submit QC Approval';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+    }
+
+    fetch(`/grpo-transfer/api/session/${sessionId}/qc-approve`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({items: items})
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+
+        if (data.success) {
+            alert('QC approval submitted successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            console.error('API error:', data);
+        }
+    })
+    .catch(error => {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+        console.error('Error:', error);
+        alert('Error submitting QC approval: ' + error.message);
+    });
+}
+
+function postTransfer() {
+    // Show transfer preview modal instead of direct confirmation
+    showTransferPreview();
+}
+
+function showTransferPreview() {
+    const container = document.getElementById('transferPreviewContent');
+    container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading transfer preview...</p></div>';
+
+    // Fetch session data to build preview
+    fetch(`/grpo-transfer/api/session/${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                buildTransferPreview(data.session);
+            } else {
+                container.innerHTML = `<div class="alert alert-danger">Error loading session data</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        });
+
+    const modal = new bootstrap.Modal(document.getElementById('transferPreviewModal'));
+    modal.show();
+}
+
+function buildTransferPreview(session) {
+    const container = document.getElementById('transferPreviewContent');
+    let html = `
+        <div class="alert alert-warning">
+            <strong>Review the transfer details below before posting to SAP B1.</strong>
+            This will create stock transfers for approved and rejected quantities.
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">Approved Transfer</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>From Warehouse:</strong> ${session.items[0]?.from_warehouse || 'N/A'}</p>
+                        <p><strong>To Warehouse:</strong> ${session.items[0]?.to_warehouse || 'N/A'}</p>
+                        <p><strong>Document Date:</strong> ${new Date(session.doc_date).toLocaleDateString()}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">Rejected Transfer (if any)</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>From Warehouse:</strong> ${session.items[0]?.from_warehouse || 'N/A'}</p>
+                        <p><strong>To Warehouse:</strong> ${session.items[0]?.to_warehouse || 'N/A'}</p>
+                        <p><strong>Document Date:</strong> ${new Date(session.doc_date).toLocaleDateString()}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Transfer Line Items</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Item Code</th>
+                                <th>Batch Number</th>
+                                <th>Approved Qty</th>
+                                <th>Rejected Qty</th>
+                                <th>From Bin</th>
+                                <th>To Bin</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+
+    // Build table rows for each item
+    session.items.forEach(item => {
+        if (item.qc_status === 'approved') {
+            if (item.is_batch_item && item.batches && item.batches.length > 0) {
+                // Show each batch as a separate row
+                item.batches.forEach(batch => {
+                    if (batch.approved_quantity > 0 || batch.rejected_quantity > 0) {
+                        html += `
+                            <tr>
+                                <td><strong>${item.item_code}</strong></td>
+                                <td>${batch.batch_number}</td>
+                                <td><span class="badge bg-success">${batch.approved_quantity.toFixed(2)}</span></td>
+                                <td><span class="badge bg-danger">${batch.rejected_quantity.toFixed(2)}</span></td>
+                                <td>${item.from_bin_code || 'N/A'}</td>
+                                <td>${item.to_bin_code || 'N/A'}</td>
+                            </tr>
+                        `;
+                    }
+                });
+            } else {
+                // Non-batch item
+                if (item.approved_quantity > 0 || item.rejected_quantity > 0) {
+                    html += `
+                        <tr>
+                            <td><strong>${item.item_code}</strong></td>
+                            <td>N/A</td>
+                            <td><span class="badge bg-success">${item.approved_quantity.toFixed(2)}</span></td>
+                            <td><span class="badge bg-danger">${item.rejected_quantity.toFixed(2)}</span></td>
+                            <td>${item.from_bin_code || 'N/A'}</td>
+                            <td>${item.to_bin_code || 'N/A'}</td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+    });
+
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Add event listener for confirm button
+    document.getElementById('confirmTransferBtn').onclick = function() {
+        confirmAndPostTransfer();
+    };
+}
+
+function confirmAndPostTransfer() {
+    const btn = document.getElementById('confirmTransferBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Posting...';
+
+    fetch(`/grpo-transfer/api/session/${sessionId}/post-transfer`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+
+        if (data.success) {
+            alert(`✓ Transfer posted successfully!\n\nSAP DocNum: ${data.sap_doc_num}\nDocEntry: ${data.sap_doc_entry}`);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to post transfer'));
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        console.error('Error:', error);
+        alert('Error posting transfer to SAP B1: ' + error.message);
+    });
+}
+
+function loadLabelsForDisplay() {
+    const container = document.getElementById('labelsContainer');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading labels...</p></div>';
+
+    fetch(`/grpo-transfer/api/session/${sessionId}/labels`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.labels && data.labels.length > 0) {
+                displayLabelsInTab(data.labels);
+            } else {
+                container.innerHTML = '<p class="text-muted">No labels generated yet. Click "Generate Labels" button to create QR labels for approved items.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            container.innerHTML = '<div class="alert alert-danger">Error loading labels: ' + error.message + '</div>';
+        });
+}
+
+function displayLabelsInTab(labels) {
+    const container = document.getElementById('labelsContainer');
+    container.innerHTML = '';
+
+    // Create a grid of label cards
+    const labelsGrid = document.createElement('div');
+    labelsGrid.className = 'row g-3';
+
+    labels.forEach((label, index) => {
+        try {
+            const qrData = typeof label.qr_data === 'string' ? JSON.parse(label.qr_data) : label.qr_data;
+
+            const labelCol = document.createElement('div');
+            labelCol.className = 'col-md-6 col-lg-4';
+
+            // Build batch info display
+            let batchDisplay = 'N/A';
+            if (qrData.batch_info) {
+                batchDisplay = `${qrData.batch_info.batch_number} (${qrData.batch_info.item_code})`;
+            } else if (qrData.batch_number) {
+                batchDisplay = qrData.batch_number;
+            }
+
+            labelCol.innerHTML = `
+                <div class="card h-100 border-2">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">${qrData.item_code || 'Item'} - Label ${label.label_number}/${label.total_labels}</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(JSON.stringify(qrData))}"
+                             alt="QR Code" class="img-fluid mb-3" style="max-width: 150px;">
+
+                        <div class="text-start small">
+                            <div class="mb-2">
+                                <strong>PO:</strong> ${qrData.session_code || 'N/A'}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Item:</strong> ${qrData.item_code || 'N/A'}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Batch:</strong> ${batchDisplay}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Qty:</strong> ${qrData.quantity || 1}
+                            </div>
+                            <div class="mb-2">
+                                <strong>From:</strong> ${qrData.from_warehouse || 'N/A'}
+                                ${qrData.from_bin_code ? ` (Bin: ${qrData.from_bin_code})` : ''}
+                            </div>
+                            <div class="mb-2">
+                                <strong>To:</strong> ${qrData.to_warehouse || 'N/A'}
+                                ${qrData.to_bin_code ? ` (Bin: ${qrData.to_bin_code})` : ''}
+                            </div>
+                            <div>
+                                <strong>Date:</strong> ${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center">
+                        <small class="text-muted">Pack ${label.label_number} of ${label.total_labels}</small>
+                    </div>
+                </div>
+            `;
+
+            labelsGrid.appendChild(labelCol);
+        } catch (e) {
+            console.error('Error processing label:', e);
+        }
+    });
+
+    container.appendChild(labelsGrid);
+
+    // Add print button
+    const printButtonContainer = document.createElement('div');
+    printButtonContainer.className = 'mt-4 text-center';
+    printButtonContainer.innerHTML = `
+        <button class="btn btn-primary btn-lg" onclick="printLabels()">
+            <i data-feather="printer"></i> Print All Labels
+        </button>
+    `;
+    container.appendChild(printButtonContainer);
+}
+
+function generateLabels() {
+    // Check if there are approved items first
+    const approvedItems = {{ items_json|tojson }}.filter(item => item.qc_status === 'approved' && item.approved_quantity > 0);
+
+    if (approvedItems.length === 0) {
+        alert('No approved items found. Please submit QC approval first.');
+        return;
+    }
+
+    // Show pack configuration modal
+    showPackConfigurationModal(approvedItems);
+}
+
+function showPackConfigurationModal(approvedItems) {
+    const container = document.getElementById('packConfigContent');
+    container.innerHTML = '';
+
+    let html = `
+        <div class="alert alert-info">
+            <strong>Configure packs for each approved item.</strong>
+            Enter the number of packs you want to generate. The approved quantity will be split across the packs.
+        </div>
+
+        <div id="packConfigItems">
+    `;
+
+    approvedItems.forEach(item => {
+        const approvedQty = item.approved_quantity;
+        const defaultPacks = Math.ceil(approvedQty / 1000); // Default: 1 pack per 1000 units
+
+        html += `
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">${item.item_code} - ${item.item_name}</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Approved Quantity</label>
+                            <input type="text" class="form-control" value="${approvedQty}" disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Number of Packs</label>
+                            <input type="number" class="form-control pack-count" data-item-id="${item.id}"
+                                   data-approved-qty="${approvedQty}" value="${defaultPacks}" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Pack Distribution</label>
+                        <div class="pack-distribution" data-item-id="${item.id}">
+                            <!-- Distribution will be calculated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Add event listeners for pack count changes
+    document.querySelectorAll('.pack-count').forEach(input => {
+        input.addEventListener('change', function() {
+            updatePackDistribution(this);
+        });
+        // Trigger initial calculation
+        updatePackDistribution(input);
+    });
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('packConfigModal'));
+    modal.show();
+
+    // Add event listener for generate button
+    document.getElementById('generateWithPacksBtn').onclick = function() {
+        generateLabelsWithPacks(approvedItems);
+    };
+}
+
+function updatePackDistribution(input) {
+    const itemId = input.dataset.itemId;
+    const approvedQty = parseInt(input.dataset.approvedQty);
+    const packCount = parseInt(input.value) || 1;
+
+    const distributionDiv = document.querySelector(`.pack-distribution[data-item-id="${itemId}"]`);
+
+    // Calculate distribution
+    const baseQty = Math.floor(approvedQty / packCount);
+    const remainder = approvedQty % packCount;
+
+    let html = '<div class="small"><table class="table table-sm table-bordered">';
+    html += '<thead><tr><th>Pack</th><th>Quantity</th></tr></thead><tbody>';
+
+    for (let i = 1; i <= packCount; i++) {
+        let packQty;
+        if (i === 1 && remainder > 0) {
+            // First pack gets the remainder
+            packQty = baseQty + remainder;
+        } else {
+            packQty = baseQty;
+        }
+
+        html += `<tr><td>Pack ${i}</td><td>${packQty}</td></tr>`;
+    }
+
+    html += '</tbody></table></div>';
+    distributionDiv.innerHTML = html;
+}
+
+function generateLabelsWithPacks(approvedItems) {
+    // Collect pack configuration
+    const packConfig = {};
+
+    document.querySelectorAll('.pack-count').forEach(input => {
+        const itemId = parseInt(input.dataset.itemId);
+        const packCount = parseInt(input.value) || 1;
+        packConfig[itemId] = packCount;
+    });
+
+    // Show loading indicator
+    const btn = document.getElementById('generateWithPacksBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+
+    // Send to API
+    fetch(`/grpo-transfer/api/session/${sessionId}/generate-qr-labels-with-packs`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            pack_config: packConfig
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+
+        if (data.success) {
+            alert(`✓ ${data.labels_generated} QR labels generated successfully!`);
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('packConfigModal'));
+            modal.hide();
+            // Load and display the generated labels
+            loadLabelsForDisplay();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to generate labels'));
+            console.error('API Error:', data);
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        console.error('Error:', error);
+        alert('Error generating labels: ' + error.message);
+    });
+}
+
+function printLabels() {
+    // Load all generated labels and show in print view
+    fetch(`/grpo-transfer/api/session/${sessionId}/labels`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.labels && data.labels.length > 0) {
+                displayLabelsForPrint(data.labels);
+            } else {
+                alert('No labels found to print');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading labels: ' + error.message);
+        });
+}
+
+function displayLabelsForPrint(labels) {
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+
+    // Build HTML for all labels
+    let labelsHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>QR Code Labels - Print</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+
+                body {
+                    font-family: Arial, sans-serif;
+                    background: white;
+                    padding: 10mm;
+                }
+
+                .labels-container {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 10mm;
+                    width: 100%;
+                }
+
+                .label-card {
+                    border: 2px solid #333;
+                    padding: 10mm;
+                    background: white;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+
+                .label-header {
+                    background: #4a5568;
+                    color: white;
+                    padding: 5mm;
+                    margin: -10mm -10mm 5mm -10mm;
+                    font-weight: bold;
+                    font-size: 12px;
+                    text-align: center;
+                }
+
+                .qr-code {
+                    text-align: center;
+                    margin: 5mm 0;
+                }
+
+                .qr-code img {
+                    width: 80mm;
+                    height: 80mm;
+                    border: 1px solid #ccc;
+                }
+
+                .label-info {
+                    font-size: 11px;
+                    line-height: 1.6;
+                    margin-top: 5mm;
+                }
+
+                .label-info-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 2mm 0;
+                    border-bottom: 1px solid #eee;
+                    padding: 2mm 0;
+                }
+
+                .label-info-label {
+                    font-weight: bold;
+                    width: 40%;
+                }
+
+                .label-info-value {
+                    width: 60%;
+                    text-align: right;
+                }
+
+                .label-number {
+                    text-align: center;
+                    font-weight: bold;
+                    margin-top: 5mm;
+                    font-size: 12px;
+                }
+
+                @media print {
+                    body {
+                        padding: 0;
+                    }
+
+                    .labels-container {
+                        gap: 5mm;
+                    }
+
+                    .label-card {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                    }
+                }
+
+                .print-header {
+                    text-align: center;
+                    margin-bottom: 10mm;
+                    border-bottom: 2px solid #333;
+                    padding-bottom: 5mm;
+                }
+
+                .print-header h1 {
+                    font-size: 18px;
+                    margin-bottom: 2mm;
+                }
+
+                .print-header p {
+                    font-size: 12px;
+                    color: #666;
+                }
+
+                .print-controls {
+                    text-align: center;
+                    margin-bottom: 10mm;
+                    display: no-print;
+                }
+
+                .print-controls button {
+                    padding: 8px 16px;
+                    margin: 0 5px;
+                    font-size: 14px;
+                    cursor: pointer;
+                    border: 1px solid #ccc;
+                    background: white;
+                    border-radius: 4px;
+                }
+
+                .print-controls button:hover {
+                    background: #f0f0f0;
+                }
+
+                @media print {
+                    .print-controls {
+                        display: none;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="print-controls">
+                <button onclick="window.print()">Print Labels</button>
+                <button onclick="window.close()">Close</button>
+            </div>
+
+            <div class="print-header">
+                <h1>QR Code Labels</h1>
+                <p>Generated Labels for Approved Items</p>
+            </div>
+
+            <div class="labels-container">
+    `;
+
+    // Add each label
+    labels.forEach((label, index) => {
+        try {
+            const qrData = typeof label.qr_data === 'string' ? JSON.parse(label.qr_data) : label.qr_data;
+
+            // Build batch info display
+            let batchDisplay = 'N/A';
+            if (qrData.batch_info) {
+                batchDisplay = `${qrData.batch_info.batch_number} (${qrData.batch_info.item_code})`;
+            } else if (qrData.batch_number) {
+                batchDisplay = qrData.batch_number;
+            }
+
+            labelsHTML += `
+                <div class="label-card">
+                    <div class="label-header">
+                        ${qrData.item_code || 'Item'} - Label ${label.label_number} of ${label.total_labels}
+                    </div>
+
+                    <div class="qr-code">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(JSON.stringify(qrData))}" alt="QR Code">
+                    </div>
+
+                    <div class="label-info">
+                        <div class="label-info-row">
+                            <div class="label-info-label">PO:</div>
+                            <div class="label-info-value">${qrData.session_code || 'N/A'}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">Item Code:</div>
+                            <div class="label-info-value">${qrData.item_code || 'N/A'}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">Item Name:</div>
+                            <div class="label-info-value">${qrData.item_name || 'N/A'}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">Batch:</div>
+                            <div class="label-info-value">${batchDisplay}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">Qty per Pack:</div>
+                            <div class="label-info-value">${qrData.quantity || 1}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">From Warehouse:</div>
+                            <div class="label-info-value">${qrData.from_warehouse || 'N/A'}${qrData.from_bin_code ? ` (Bin: ${qrData.from_bin_code})` : ''}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">To Warehouse:</div>
+                            <div class="label-info-value">${qrData.to_warehouse || 'N/A'}${qrData.to_bin_code ? ` (Bin: ${qrData.to_bin_code})` : ''}</div>
+                        </div>
+
+                        <div class="label-info-row">
+                            <div class="label-info-label">GRN Date:</div>
+                            <div class="label-info-value">${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}</div>
+                        </div>
+                    </div>
+
+                    <div class="label-number">Pack: ${label.label_number} of ${label.total_labels}</div>
+                </div>
+            `;
+        } catch (e) {
+            console.error('Error processing label:', e);
+        }
+    });
+
+    labelsHTML += `
+            </div>
+        </body>
+        </html>
+    `;
+
+    // Write to print window
+    printWindow.document.write(labelsHTML);
+    printWindow.document.close();
+
+    // Trigger print after a short delay to ensure content is loaded
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+    }, 500);
+}
+
+let currentEditItemId = null;
+let warehousesList = [];
+
+function editItem(itemId) {
+    currentEditItemId = itemId;
+
+    // Show loading in modal
+    document.getElementById('itemEditContent').innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading item data...</p></div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('itemEditModal'));
+    modal.show();
+
+    // Fetch item data from API
+    fetch(`/grpo-transfer/api/item/${itemId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderItemEditForm(data.item);
+            } else {
+                document.getElementById('itemEditContent').innerHTML = `<div class="alert alert-danger">Error loading item: ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('itemEditContent').innerHTML = `<div class="alert alert-danger">Error loading item data</div>`;
+        });
+}
+
+function renderItemEditForm(item) {
+    // Build batch information HTML
+    let batchHTML = '';
+    if (item.batches && item.batches.length > 0) {
+        batchHTML = `
+            <div class="mb-3">
+                <label class="form-label">Batch Information</label>
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Batch Number</th>
+                            <th>Quantity</th>
+                            <th>Expiry Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${item.batches.map(batch => `
+                            <tr>
+                                <td>${batch.batch_number}</td>
+                                <td>${batch.batch_quantity}</td>
+                                <td>${batch.expiry_date || 'N/A'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    const content = `
+        <form id="itemEditForm">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Item Code</label>
+                    <input type="text" class="form-control" value="${item.item_code}" disabled>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Item Name</label>
+                    <input type="text" class="form-control" value="${item.item_name}" disabled>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Received Qty</label>
+                    <input type="number" class="form-control" value="${item.received_quantity}" disabled>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Approved Qty</label>
+                    <input type="number" class="form-control" id="editApprovedQty" value="${item.approved_quantity || 0}" min="0" max="${item.received_quantity}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Rejected Qty</label>
+                    <input type="number" class="form-control" id="editRejectedQty" value="${item.rejected_quantity || 0}" min="0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="editStatus">
+                        <option value="pending" ${item.qc_status === 'pending' ? 'selected' : ''}>Pending</option>
+                        <option value="approved" ${item.qc_status === 'approved' ? 'selected' : ''}>Approved</option>
+                        <option value="rejected" ${item.qc_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                        <option value="partial" ${item.qc_status === 'partial' ? 'selected' : ''}>Partial</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3" disabled>
+                <div class="col-md-6">
+                    <label class="form-label">From Warehouse</label>
+                    <select class="form-select" id="editFromWarehouse" disabled>
+                        <option value="">-- Select Warehouse --</option>
+                    </select>
+                </div>
+<!--                <div class="col-md-6">-->
+<!--                    <label class="form-label">From Bin Code</label>-->
+<!--                    <select class="form-select" id="editFromBin" disabled>-->
+<!--                        <option value="">&#45;&#45; Select Bin &#45;&#45;</option>-->
+<!--                    </select>-->
+<!--                </div>-->
+            </div>
+
+            <div class="row mb-3">
+            <h6>Approved Qty Designation WH</h6>
+                <div class="col-md-6">
+                    <label class="form-label">To Warehouse</label>
+                    <select class="form-select" id="editToWarehouse">
+                        <option value="">-- Select Warehouse --</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">To Bin Code</label>
+                    <select class="form-select" id="editToBin">
+                        <option value="">-- Select Bin --</option>
+                    </select>
+                </div>
+            </div>
+
+             <div class="row mb-3">
+             <h6>Rejected Qty Designation WH</h6>
+                <div class="col-md-6">
+                    <label class="form-label">To Warehouse</label>
+                    <select class="form-select" id="editToWarehouses">
+                        <option value="">-- Select Warehouse --</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">To Bin Code</label>
+                    <select class="form-select" id="editToBins">
+                        <option value="">-- Select Bin --</option>
+                    </select>
+                </div>
+            </div>
+
+            ${batchHTML}
+
+            <div class="mb-3">
+                <label class="form-label">QC Notes</label>
+                <textarea class="form-control" id="editNotes" rows="3">${item.qc_notes || ''}</textarea>
+            </div>
+        </form>
+    `;
+
+    document.getElementById('itemEditContent').innerHTML = content;
+
+    // Load warehouses into both from and to warehouse dropdowns
+    loadWarehousesForEditBoth(item.from_warehouse, item.to_warehouse, item.from_bin_code, item.to_bin_code);
+
+    // Add change listeners for warehouses to load bins
+<!--    document.getElementById('editFromWarehouse').addEventListener('change', function() {-->
+<!--        loadBinCodesForEdit(this.value, 'editFromBin', item.from_bin_code);-->
+<!--    });-->
+
+    document.getElementById('editToWarehouse').addEventListener('change', function() {
+        loadBinCodesForEdit(this.value, 'editToBin', item.to_bin_code);
+    });
+
+    document.getElementById('editToWarehouses').addEventListener('change', function() {
+        loadBinCodesForEdit(this.value, 'editToBins', item.to_bin_code);
+    });
+}
+
+function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin) {
+    // Load warehouses for both from and to warehouse dropdowns
+    const fromSelect = document.getElementById('editFromWarehouse');
+    const toSelect = document.getElementById('editToWarehouse');
+    
+    fetch('/grpo-transfer/api/warehouses')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.warehouses) {
+                // Populate from warehouse dropdown
+                fromSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
+                toSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
+
+                data.warehouses.forEach(wh => {
+                    // From warehouse option
+                    const fromOption = document.createElement('option');
+                    fromOption.value = wh.WarehouseCode;
+                    fromOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                    if (wh.WarehouseCode === fromWarehouse) {
+                        fromOption.selected = true;
+                    }
+                    fromSelect.appendChild(fromOption);
+
+                    // To warehouse option
+                    const toOption = document.createElement('option');
+                    toOption.value = wh.WarehouseCode;
+                    toOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                    if (wh.WarehouseCode === toWarehouse) {
+                        toOption.selected = true;
+                    }
+                    toSelect.appendChild(toOption);
+                });
+
+                // Load bins for both warehouses if they're selected
+                if (fromWarehouse) {
+                    loadBinCodesForEdit(fromWarehouse, 'editFromBin', fromBin);
+                }
+                if (toWarehouse) {
+                    loadBinCodesForEdit(toWarehouse, 'editToBin', toBin);
+                }
+            } else {
+                fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+                toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+                console.error('API error:', data.error);
+            }
+        })
+        .catch(error => {
+            fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+            toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+            console.error('Error loading warehouses:', error);
+        });
+}
+
+function loadWarehousesForEdit(selectedWarehouse) {
+    const select = document.getElementById('editToWarehouse');
+
+    // Show loading state
+    select.disabled = true;
+    select.innerHTML = '<option value="">Loading warehouses...</option>';
+
+    fetch('/grpo-transfer/api/warehouses')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            select.disabled = false;
+
+            if (data.success && data.warehouses) {
+                select.innerHTML = '<option value="">-- Select Warehouse --</option>';
+
+                data.warehouses.forEach(wh => {
+                    const option = document.createElement('option');
+                    option.value = wh.WarehouseCode;
+                    option.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                    if (wh.WarehouseCode === selectedWarehouse) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                // If warehouse is selected, load bins
+                if (selectedWarehouse) {
+                    loadBinCodesForEdit(selectedWarehouse, null);
+                }
+            } else {
+                select.innerHTML = '<option value="">Error loading warehouses</option>';
+                console.error('API error:', data.error);
+            }
+        })
+        .catch(error => {
+            select.disabled = false;
+            select.innerHTML = '<option value="">Error loading warehouses</option>';
+            console.error('Error loading warehouses:', error);
+        });
+}
+
+function loadBinCodesForEdit(warehouseCode, binSelectId, selectedBin) {
+    if (!warehouseCode) return;
+
+    const select = document.getElementById(binSelectId);
+    if (!select) return;
+
+    // Show loading state
+    select.disabled = true;
+    select.innerHTML = '<option value="">Loading bin codes...</option>';
+
+    fetch(`/grpo-transfer/api/bin-codes/${warehouseCode}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            select.disabled = false;
+
+            if (data.success && data.bins) {
+                select.innerHTML = '<option value="">-- Select Bin --</option>';
+
+                data.bins.forEach(bin => {
+                    const option = document.createElement('option');
+                    option.value = bin.BinCode;
+                    option.textContent = bin.BinCode;
+                    option.dataset.absEntry = bin.AbsEntry;
+                    if (bin.BinCode === selectedBin) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+            } else {
+                select.innerHTML = '<option value="">Error loading bin codes</option>';
+                console.error('API error:', data.error);
+            }
+        })
+        .catch(error => {
+            select.disabled = false;
+            select.innerHTML = '<option value="">Error loading bin codes</option>';
+            console.error('Error loading bin codes:', error);
+        });
+}
+
+function saveItem() {
+    if (!currentEditItemId) {
+        alert('No item selected');
+        return;
+    }
+
+    const approvedQty = parseFloat(document.getElementById('editApprovedQty').value) || 0;
+    const rejectedQty = parseFloat(document.getElementById('editRejectedQty').value) || 0;
+    const status = document.getElementById('editStatus').value;
+    const fromWarehouse = document.getElementById('editFromWarehouse').value;
+    const fromBin = document.getElementById('editFromBin').value;
+    const toWarehouse = document.getElementById('editToWarehouse').value;
+    const toBin = document.getElementById('editToBin').value;
+    const notes = document.getElementById('editNotes').value;
+    const receivedQty = parseFloat(document.getElementById('editApprovedQty').max) || 0;
+
+    // Validation
+    const errors = [];
+
+    if (approvedQty < 0) {
+        errors.push('Approved quantity cannot be negative');
+    }
+
+    if (rejectedQty < 0) {
+        errors.push('Rejected quantity cannot be negative');
+    }
+
+    if (approvedQty + rejectedQty > receivedQty) {
+        errors.push(`Approved + Rejected (${approvedQty + rejectedQty}) cannot exceed Received (${receivedQty})`);
+    }
+
+    if (status === 'approved' && approvedQty === 0) {
+        errors.push('Cannot mark as approved with 0 approved quantity');
+    }
+
+    if (status === 'rejected' && rejectedQty === 0) {
+        errors.push('Cannot mark as rejected with 0 rejected quantity');
+    }
+
+    if (status !== 'pending' && !fromWarehouse) {
+        errors.push('Please select a source warehouse');
+    }
+
+    if (status !== 'pending' && !fromBin) {
+        errors.push('Please select a source bin code');
+    }
+
+    if (status !== 'pending' && !toWarehouse) {
+        errors.push('Please select a destination warehouse');
+    }
+
+    if (status !== 'pending' && !toBin) {
+        errors.push('Please select a destination bin code');
+    }
+
+    if (errors.length > 0) {
+        alert('Validation errors:\n\n' + errors.join('\n'));
+        return;
+    }
+
+    const saveBtn = document.getElementById('saveItemBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+    fetch(`/grpo-transfer/api/item/${currentEditItemId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            approved_quantity: approvedQty,
+            rejected_quantity: rejectedQty,
+            qc_status: status,
+            from_warehouse: fromWarehouse,
+            from_bin_code: fromBin,
+            to_warehouse: toWarehouse,
+            to_bin_code: toBin,
+            qc_notes: notes
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+
+        if (data.success) {
+            alert('Item updated successfully!');
+            // Close modal and refresh page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('itemEditModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update item'));
+            console.error('API error:', data);
+        }
+    })
+    .catch(error => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+        console.error('Error:', error);
+        alert('Error saving item: ' + error.message);
+    });
+}
+
+// Attach save button handler
+document.addEventListener('DOMContentLoaded', function() {
+    const saveBtn = document.getElementById('saveItemBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveItem);
+    }
+});
+</script>
+{% endblock %}

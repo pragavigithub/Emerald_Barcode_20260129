@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}GRPO Transfer - QC Validation{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i data-feather="truck"></i> GRPO Transfer</h2>
+                <div>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                        <i data-feather="arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">QC Validation and Warehouse Transfer Management</p>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i data-feather="inbox" class="mb-2" style="width: 32px; height: 32px;"></i>
+                    <h6>Active Sessions</h6>
+                    <h3 id="activeSessions">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i data-feather="check-circle" class="mb-2" style="width: 32px; height: 32px;"></i>
+                    <h6>Approved Items</h6>
+                    <h3 id="approvedItems">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i data-feather="x-circle" class="mb-2" style="width: 32px; height: 32px;"></i>
+                    <h6>Rejected Items</h6>
+                    <h3 id="rejectedItems">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i data-feather="send" class="mb-2" style="width: 32px; height: 32px;"></i>
+                    <h6>Transferred</h6>
+                    <h3 id="transferred">0</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i data-feather="plus-circle"></i> Start New Transfer Session</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="seriesSelect" class="form-label">Select Series <span class="text-danger">*</span></label>
+                                <select class="form-select" id="seriesSelect">
+                                    <option value="">-- Select Series --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="docSelect" class="form-label">Select Document <span class="text-danger">*</span></label>
+                                <select class="form-select" id="docSelect" disabled>
+                                    <option value="">-- Select Document --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label>&nbsp;</label>
+                                <button class="btn btn-primary w-100" id="startSessionBtn" disabled>
+                                    <i data-feather="play"></i> Create
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Sessions Table -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i data-feather="list"></i> Active Sessions</h5>
+                    <div>
+                        <label class="mb-0 me-2">
+                            Per Page:
+                            <select id="perPageSelect" class="form-select form-select-sm d-inline-block w-auto">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="sessionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Session Code</th>
+                                    <th>GRPO Doc</th>
+                                    <th>Vendor</th>
+                                    <th>Items</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessionsTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i data-feather="inbox"></i> No active sessions
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Page navigation" id="paginationNav" style="display: none;">
+                        <ul class="pagination justify-content-center" id="paginationList">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allSessions = [];
+let currentPage = 1;
+let perPage = 10;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSeriesList();
+    loadActiveSessions();
+    
+    // Per page change
+    document.getElementById('perPageSelect').addEventListener('change', function() {
+        perPage = parseInt(this.value);
+        currentPage = 1;
+        displaySessions();
+    });
+    
+    // Series selection change
+    document.getElementById('seriesSelect').addEventListener('change', function() {
+        if (this.value) {
+            loadDocuments(this.value);
+        } else {
+            document.getElementById('docSelect').disabled = true;
+            document.getElementById('docSelect').innerHTML = '<option value="">-- Select Document --</option>';
+        }
+    });
+    
+    // Document selection change
+    document.getElementById('docSelect').addEventListener('change', function() {
+        document.getElementById('startSessionBtn').disabled = !this.value;
+    });
+    
+    // Start session button
+    document.getElementById('startSessionBtn').addEventListener('click', function() {
+        const seriesId = document.getElementById('seriesSelect').value;
+        const docEntry = document.getElementById('docSelect').value;
+        
+        if (seriesId && docEntry) {
+            window.location.href = `/grpo-transfer/session/create/${docEntry}`;
+        }
+    });
+});
+
+function loadSeriesList() {
+    fetch('/grpo-transfer/api/series-list')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('seriesSelect');
+                data.series.forEach(series => {
+                    const option = document.createElement('option');
+                    option.value = series.SeriesID;
+                    option.textContent = `${series.SeriesName} (ID: ${series.SeriesID})`;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading series:', error));
+}
+
+function loadDocuments(seriesId) {
+    fetch(`/grpo-transfer/api/doc-numbers/${seriesId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('docSelect');
+                select.innerHTML = '<option value="">-- Select Document --</option>';
+                data.documents.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.DocEntry;
+                    option.textContent = `${doc.DocNum} - ${doc.CardName}`;
+                    select.appendChild(option);
+                });
+                select.disabled = false;
+            }
+        })
+        .catch(error => console.error('Error loading documents:', error));
+}
+
+function loadActiveSessions() {
+    fetch('/grpo-transfer/api/sessions')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                allSessions = data.sessions;
+                currentPage = 1;
+                displaySessions();
+            }
+        })
+        .catch(error => console.error('Error loading sessions:', error));
+}
+
+function displaySessions() {
+    const tbody = document.getElementById('sessionsTableBody');
+    const paginationNav = document.getElementById('paginationNav');
+    
+    if (allSessions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i data-feather="inbox"></i> No active sessions</td></tr>';
+        paginationNav.style.display = 'none';
+        return;
+    }
+    
+    // Calculate pagination
+    const totalPages = Math.ceil(allSessions.length / perPage);
+    const startIndex = (currentPage - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedSessions = allSessions.slice(startIndex, endIndex);
+    
+    // Display sessions
+    tbody.innerHTML = '';
+    paginatedSessions.forEach(session => {
+        const row = document.createElement('tr');
+        const statusBadge = getStatusBadge(session.status);
+        
+        row.innerHTML = `
+            <td><strong>${session.session_code}</strong></td>
+            <td>${session.grpo_doc_num}</td>
+            <td>${session.vendor_name}</td>
+            <td><span class="badge bg-info">${session.item_count}</span></td>
+            <td>${statusBadge}</td>
+            <td>${new Date(session.created_at).toLocaleDateString()}</td>
+            <td>
+                <a href="/grpo-transfer/session/${session.id}" class="btn btn-sm btn-primary" title="View">
+                    <i data-feather="edit"></i>
+                </a>
+                <button class="btn btn-sm btn-danger" onclick="deleteSession(${session.id})" title="Delete">
+                    <i data-feather="trash-2"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // Display pagination
+    if (totalPages > 1) {
+        paginationNav.style.display = 'block';
+        const paginationList = document.getElementById('paginationList');
+        paginationList.innerHTML = '';
+        
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">Previous</a>`;
+        paginationList.appendChild(prevLi);
+        
+        // Page numbers
+        for (let i = 1; i <= totalPages; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>`;
+            paginationList.appendChild(li);
+        }
+        
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">Next</a>`;
+        paginationList.appendChild(nextLi);
+    } else {
+        paginationNav.style.display = 'none';
+    }
+}
+
+function goToPage(page) {
+    const totalPages = Math.ceil(allSessions.length / perPage);
+    if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        displaySessions();
+        window.scrollTo(0, 0);
+    }
+}
+
+function deleteSession(sessionId) {
+    if (confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+        fetch(`/grpo-transfer/api/session/${sessionId}/delete`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Session deleted successfully');
+                loadActiveSessions();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to delete session'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting session');
+        });
+    }
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'draft': '<span class="badge bg-secondary">Draft</span>',
+        'in_progress': '<span class="badge bg-warning text-dark">In Progress</span>',
+        'completed': '<span class="badge bg-success">Completed</span>',
+        'transferred': '<span class="badge bg-info">Transferred</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">Unknown</span>';
+}
+</script>
+{% endblock %}
