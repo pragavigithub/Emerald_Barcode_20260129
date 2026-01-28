@@ -1509,8 +1509,8 @@ function renderItemEditForm(item) {
 
     document.getElementById('itemEditContent').innerHTML = content;
 
-    // Load warehouses into both from and to warehouse dropdowns
-    loadWarehousesForEditBoth(item.from_warehouse, item.to_warehouse, item.from_bin_code, item.to_bin_code);
+    // Load warehouses into from, approved-to, and rejected-to warehouse dropdowns
+    loadWarehousesForEditBoth(item.from_warehouse, item.to_warehouse, item.from_bin_code, item.to_bin_code, item.rejected_to_warehouse, item.rejected_to_bin_code);
 
     // Add change listeners for warehouses to load bins
 <!--    document.getElementById('editFromWarehouse').addEventListener('change', function() {-->
@@ -1526,10 +1526,11 @@ function renderItemEditForm(item) {
     });
 }
 
-function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin) {
-    // Load warehouses for both from and to warehouse dropdowns
+function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin, rejectedToWarehouse, rejectedToBin) {
+    // Load warehouses for from, approved-to, and rejected-to warehouse dropdowns
     const fromSelect = document.getElementById('editFromWarehouse');
     const toSelect = document.getElementById('editToWarehouse');
+    const rejectedToSelect = document.getElementById('editToWarehouses');
     
     fetch('/grpo-transfer/api/warehouses')
         .then(response => {
@@ -1540,9 +1541,10 @@ function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin) {
         })
         .then(data => {
             if (data.success && data.warehouses) {
-                // Populate from warehouse dropdown
+                // Populate all warehouse dropdowns
                 fromSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
                 toSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
+                rejectedToSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
 
                 data.warehouses.forEach(wh => {
                     // From warehouse option
@@ -1554,7 +1556,7 @@ function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin) {
                     }
                     fromSelect.appendChild(fromOption);
 
-                    // To warehouse option
+                    // Approved To warehouse option
                     const toOption = document.createElement('option');
                     toOption.value = wh.WarehouseCode;
                     toOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
@@ -1562,24 +1564,38 @@ function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin) {
                         toOption.selected = true;
                     }
                     toSelect.appendChild(toOption);
+
+                    // Rejected To warehouse option
+                    const rejectedOption = document.createElement('option');
+                    rejectedOption.value = wh.WarehouseCode;
+                    rejectedOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                    if (wh.WarehouseCode === rejectedToWarehouse) {
+                        rejectedOption.selected = true;
+                    }
+                    rejectedToSelect.appendChild(rejectedOption);
                 });
 
-                // Load bins for both warehouses if they're selected
+                // Load bins for all warehouses if they're selected
                 if (fromWarehouse) {
                     loadBinCodesForEdit(fromWarehouse, 'editFromBin', fromBin);
                 }
                 if (toWarehouse) {
                     loadBinCodesForEdit(toWarehouse, 'editToBin', toBin);
                 }
+                if (rejectedToWarehouse) {
+                    loadBinCodesForEdit(rejectedToWarehouse, 'editToBins', rejectedToBin);
+                }
             } else {
                 fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
                 toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+                rejectedToSelect.innerHTML = '<option value="">Error loading warehouses</option>';
                 console.error('API error:', data.error);
             }
         })
         .catch(error => {
             fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
             toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
+            rejectedToSelect.innerHTML = '<option value="">Error loading warehouses</option>';
             console.error('Error loading warehouses:', error);
         });
 }
@@ -1688,6 +1704,8 @@ function saveItem() {
     const fromBin = document.getElementById('editFromBin').value;
     const toWarehouse = document.getElementById('editToWarehouse').value;
     const toBin = document.getElementById('editToBin').value;
+    const rejectedToWarehouse = document.getElementById('editToWarehouses').value;
+    const rejectedToBin = document.getElementById('editToBins').value;
     const notes = document.getElementById('editNotes').value;
     const receivedQty = parseFloat(document.getElementById('editApprovedQty').max) || 0;
 
@@ -1750,6 +1768,10 @@ function saveItem() {
             from_bin_code: fromBin,
             to_warehouse: toWarehouse,
             to_bin_code: toBin,
+            approved_to_warehouse: toWarehouse,
+            approved_to_bin_code: toBin,
+            rejected_to_warehouse: rejectedToWarehouse,
+            rejected_to_bin_code: rejectedToBin,
             qc_notes: notes
         })
     })
