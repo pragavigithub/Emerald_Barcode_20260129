@@ -69,7 +69,7 @@
                                     <span class="badge bg-warning text-dark">In Progress</span>
                                 {% elif session.status == 'completed' %}
                                     <span class="badge bg-success">Completed</span>
-                                {% elif session.status == 'transferred' %}
+                                {% elif session.status == 'posted' %}
                                     <span class="badge bg-info">Transferred</span>
                                 {% endif %}
                             </p>
@@ -81,9 +81,15 @@
                     </div>
                     {% if session.transfer_doc_num %}
                     <div class="row">
-                        <div class="col-12">
+                        <div class="col-6">
                             <p class="text-muted small">SAP Transfer Document</p>
-                            <p><strong>{{ session.transfer_doc_num }}</strong></p>
+                            <p>Approved Doc Number: <strong>{{ session.transfer_doc_num }}</strong></p>
+
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">SAP Transfer Document</p>
+
+                            <p>Rejected Doc Number: <strong>{{ session.rejected_doc_num }}</strong></p>
                         </div>
                     </div>
                     {% endif %}
