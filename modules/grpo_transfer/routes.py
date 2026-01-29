@@ -182,9 +182,19 @@ def create_session_view(doc_entry):
                 item.from_bin_abs_entry = bin_row.get("BinAbsEntry")
 
                 bin_info = sap.get_bin_location_details(item.from_bin_abs_entry)
+                print("bin_info---->", bin_info)
+
                 if bin_info:
-                    item.from_bin_code = bin_info.get("BinCode")
-                    item.from_bin_abs_entry=bin_info.get("AbsEntry")
+                    if isinstance(bin_info, list) and len(bin_info) > 0:
+                        bin_row = bin_info[0]
+                    elif isinstance(bin_info, dict):
+                        bin_row = bin_info
+                    else:
+                        bin_row = None
+
+                    if bin_row:
+                        item.from_bin_code = bin_row.get("BinCode")
+                        item.from_bin_abs_entry = bin_row.get("AbsEntry")
             # ---------- ITEM TYPE ----------
             item_code = item.item_code
             val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
@@ -582,7 +592,7 @@ def get_sessions():
     """Get all active sessions"""
     try:
         sessions = GRPOTransferSession.query.filter(
-            GRPOTransferSession.status.in_(['draft', 'in_progress', 'completed','transferred'])
+            GRPOTransferSession.status.in_(['draft', 'in_progress', 'completed','posted'])
         ).order_by(GRPOTransferSession.created_at.desc()).all()
         
         sessions_data = []
@@ -1519,122 +1529,122 @@ def update_item(item_id):
             }), 404
 
         data = request.get_json() or {}
-
-        # ==============================================================
-        # STEP 1: Validate Item Type when Warehouse is edited
-        # ==============================================================
-        if 'to_warehouse' in data or 'from_warehouse' in data:
-            sap = SAPIntegration()
-
-            if not sap.ensure_logged_in():
-                return jsonify({
-                    'success': False,
-                    'error': 'SAP B1 authentication failed'
-                }), 500
-
-            logger.info(
-                f"Validating item {item.item_code} "
-                f"(DocEntry {item.sap_base_entry}, Line {item.sap_base_line})"
-            )
-
-            # ---------- Item validation ----------
-            val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
-            val_payload = {
-                "ParamList": f"itemCode='{item.item_code}'"
-            }
-
-            val_response = sap.session.post(
-                val_url,
-                json=val_payload,
-                headers={'Prefer': 'odata.maxpagesize=0'},
-                timeout=30
-            )
-
-            if val_response.status_code == 200:
-                val_data = val_response.json().get('value', [])
-
-                if val_data:
-                    info = val_data[0]
-                    is_batch = info.get('BatchNum') == 'Y'
-                    is_serial = info.get('SerialNum') == 'Y'
-
-                    item.is_batch_item = is_batch
-                    item.is_serial_item = is_serial
-                    item.is_non_managed = not is_batch and not is_serial
-
-                    logger.info(
-                        f"Item {item.item_code} -> "
-                        f"Batch:{is_batch}, Serial:{is_serial}"
-                    )
-
-                    # ==================================================
-                    # STEP 2: Fetch Batch Details (if batch-managed)
-                    # ==================================================
-                    if is_batch:
-                        batch_url = f"{sap.base_url}/b1s/v1/SQLQueries('Get_Batch_By_DocEntry_ItemCode')/List"
-                        param_list = (
-                            f"docEntry='{item.sap_base_entry}'&"
-                            f"itemCode='{item.item_code}'&"
-                            f"lineNum='{item.sap_base_line}'"
-                        )
-
-                        batch_response = sap.session.post(
-                            batch_url,
-                            json={"ParamList": param_list},
-                            headers={'Prefer': 'odata.maxpagesize=0'},
-                            timeout=30
-                        )
-
-                        # Clear existing batches
-                        GRPOTransferBatch.query.filter_by(
-                            item_id=item.id
-                        ).delete()
-
-                        if batch_response.status_code == 200:
-                            batches = batch_response.json().get('value', [])
-
-                            for b in batches:
-                                batch_no = b.get('BatchNum')
-                                if not batch_no:
-                                    continue
-
-                                batch = GRPOTransferBatch(
-                                    item_id=item.id,
-                                    batch_number=batch_no,
-                                    batch_quantity=float(b.get('Quantity', 0)),
-                                    approved_quantity=0,
-                                    rejected_quantity=0,
-                                    qc_status='pending'
-                                )
-
-                                if b.get('ExpDate'):
-                                    batch.expiry_date = datetime.strptime(
-                                        b['ExpDate'], '%Y%m%d'
-                                    ).date()
-
-                                if b.get('MnfDate'):
-                                    batch.manufacture_date = datetime.strptime(
-                                        b['MnfDate'], '%Y%m%d'
-                                    ).date()
-
-                                db.session.add(batch)
-
-                        logger.info("Batch details refreshed successfully")
-
-                    else:
-                        # Non-batch item → clear batches
-                        GRPOTransferBatch.query.filter_by(
-                            item_id=item.id
-                        ).delete()
-
-                else:
-                    logger.warning("Item not found in SAP validation query")
-
-            else:
-                logger.warning(
-                    f"SAP validation failed: {val_response.status_code}"
-                )
-
+        sap = SAPIntegration()
+        # # ==============================================================
+        # # STEP 1: Validate Item Type when Warehouse is edited
+        # # ==============================================================
+        # if 'to_warehouse' in data or 'from_warehouse' in data:
+        #     sap = SAPIntegration()
+        #
+        #     if not sap.ensure_logged_in():
+        #         return jsonify({
+        #             'success': False,
+        #             'error': 'SAP B1 authentication failed'
+        #         }), 500
+        #
+        #     logger.info(
+        #         f"Validating item {item.item_code} "
+        #         f"(DocEntry {item.sap_base_entry}, Line {item.sap_base_line})"
+        #     )
+        #
+        #     # ---------- Item validation ----------
+        #     val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
+        #     val_payload = {
+        #         "ParamList": f"itemCode='{item.item_code}'"
+        #     }
+        #
+        #     val_response = sap.session.post(
+        #         val_url,
+        #         json=val_payload,
+        #         headers={'Prefer': 'odata.maxpagesize=0'},
+        #         timeout=30
+        #     )
+        #
+        #     if val_response.status_code == 200:
+        #         val_data = val_response.json().get('value', [])
+        #
+        #         if val_data:
+        #             info = val_data[0]
+        #             is_batch = info.get('BatchNum') == 'Y'
+        #             is_serial = info.get('SerialNum') == 'Y'
+        #
+        #             item.is_batch_item = is_batch
+        #             item.is_serial_item = is_serial
+        #             item.is_non_managed = not is_batch and not is_serial
+        #
+        #             logger.info(
+        #                 f"Item {item.item_code} -> "
+        #                 f"Batch:{is_batch}, Serial:{is_serial}"
+        #             )
+        #
+        #             # ==================================================
+        #             # STEP 2: Fetch Batch Details (if batch-managed)
+        #             # ==================================================
+        #             if is_batch:
+        #                 batch_url = f"{sap.base_url}/b1s/v1/SQLQueries('Get_Batch_By_DocEntry_ItemCode')/List"
+        #                 param_list = (
+        #                     f"docEntry='{item.sap_base_entry}'&"
+        #                     f"itemCode='{item.item_code}'&"
+        #                     f"lineNum='{item.sap_base_line}'"
+        #                 )
+        #
+        #                 batch_response = sap.session.post(
+        #                     batch_url,
+        #                     json={"ParamList": param_list},
+        #                     headers={'Prefer': 'odata.maxpagesize=0'},
+        #                     timeout=30
+        #                 )
+        #
+        #                 # Clear existing batches
+        #                 GRPOTransferBatch.query.filter_by(
+        #                     item_id=item.id
+        #                 ).delete()
+        #
+        #                 if batch_response.status_code == 200:
+        #                     batches = batch_response.json().get('value', [])
+        #
+        #                     for b in batches:
+        #                         batch_no = b.get('BatchNum')
+        #                         if not batch_no:
+        #                             continue
+        #
+        #                         batch = GRPOTransferBatch(
+        #                             item_id=item.id,
+        #                             batch_number=batch_no,
+        #                             batch_quantity=float(b.get('Quantity', 0)),
+        #                             approved_quantity=0,
+        #                             rejected_quantity=0,
+        #                             qc_status='pending'
+        #                         )
+        #
+        #                         if b.get('ExpDate'):
+        #                             batch.expiry_date = datetime.strptime(
+        #                                 b['ExpDate'], '%Y%m%d'
+        #                             ).date()
+        #
+        #                         if b.get('MnfDate'):
+        #                             batch.manufacture_date = datetime.strptime(
+        #                                 b['MnfDate'], '%Y%m%d'
+        #                             ).date()
+        #
+        #                         db.session.add(batch)
+        #
+        #                 logger.info("Batch details refreshed successfully")
+        #
+        #             else:
+        #                 # Non-batch item → clear batches
+        #                 GRPOTransferBatch.query.filter_by(
+        #                     item_id=item.id
+        #                 ).delete()
+        #
+        #         else:
+        #             logger.warning("Item not found in SAP validation query")
+        #
+        #     else:
+        #         logger.warning(
+        #             f"SAP validation failed: {val_response.status_code}"
+        #         )
+        #
         # ==============================================================
         # STEP 3: Update Editable Fields
         # ==============================================================
@@ -1656,8 +1666,8 @@ def update_item(item_id):
         # if 'from_bin_code' in data:
         #     item.from_bin_code = data['from_bin_code']
 
-        if 'from_bin_abs_entry' in data:
-            item.from_bin_abs_entry = data['from_bin_abs_entry']
+        # if 'from_bin_abs_entry' in data:
+        #     item.from_bin_abs_entry = data['from_bin_abs_entry']
 
         if 'to_warehouse' in data:
             item.to_warehouse = data['to_warehouse']
@@ -1712,190 +1722,6 @@ def update_item(item_id):
             'error': str(e)
         }), 500
 
-# @grpo_transfer_bp.route('/api/item/<int:item_id>', methods=['PUT'])
-# @login_required
-# def update_item(item_id):
-#     """Update single item with validation"""
-#     try:
-#         item = GRPOTransferItem.query.get(item_id)
-#         if not item:
-#             return jsonify({
-#                 'success': False,
-#                 'error': 'Item not found'
-#             }), 404
-        
-#         data = request.get_json()
-        
-#         # ============================================================================
-#         # STEP 1: Validate Item Type if warehouse is being set
-#         # ============================================================================
-#         if 'to_warehouse' in data or 'from_warehouse' in data:
-#             sap = SAPIntegration()
-            
-#             # Ensure logged in
-#             if not sap.ensure_logged_in():
-#                 return jsonify({
-#                     'success': False,
-#                     'error': 'SAP B1 authentication failed'
-#                 }), 500
-            
-#             logger.info(f"Validating item {item.item_code} (line {item.sap_base_line}) during edit")
-            
-#             # Call SAP query to validate item type
-#             val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
-#             val_headers = {'Prefer': 'odata.maxpagesize=0'}
-#             val_payload = {"ParamList": f"itemCode='{item.item_code}'"}
-            
-#             val_response = sap.session.post(val_url, json=val_payload, headers=val_headers, timeout=30)
-            
-#             if val_response.status_code == 200:
-#                 val_data = val_response.json()
-#                 val_items = val_data.get('value', [])
-                
-#                 if val_items:
-#                     val_info = val_items[0]
-#                     is_batch = val_info.get('BatchNum') == 'Y'
-#                     is_serial = val_info.get('SerialNum') == 'Y'
-                    
-#                     # Update item type flags
-#                     item.is_batch_item = is_batch
-#                     item.is_serial_item = is_serial
-#                     item.is_non_managed = not is_batch and not is_serial
-                    
-#                     logger.info(f"✅ Item {item.item_code} validated - Batch: {is_batch}, Serial: {is_serial}, Non-Managed: {item.is_non_managed}")
-                    
-#                     # ============================================================================
-#                     # STEP 2: If Batch Item, Fetch and Store Batch Numbers
-#                     # ============================================================================
-#                     if is_batch:
-#                         logger.info(f"Fetching batch details for item {item.item_code} (line {item.sap_base_line})")
-                        
-#                         # Use the batch details API
-#                         batch_url = f"{sap.base_url}/b1s/v1/SQLQueries('Get_Batch_By_DocEntry_ItemCode')/List"
-#                         batch_headers = {'Prefer': 'odata.maxpagesize=0'}
-                        
-#                         # Build parameter list with docEntry, itemCode, and lineNum
-#                         param_list = f"docEntry='{item.sap_base_entry}'&itemCode='{item.item_code}'&lineNum='{item.sap_base_line}'"
-#                         batch_payload = {"ParamList": param_list}
-                        
-#                         logger.debug(f"Batch query params: {param_list}")
-                        
-#                         batch_response = sap.session.post(batch_url, json=batch_payload, headers=batch_headers, timeout=30)
-                        
-#                         if batch_response.status_code == 200:
-#                             batch_data = batch_response.json()
-#                             batches = batch_data.get('value', [])
-                            
-#                             if batches:
-#                                 logger.info(f"✅ Retrieved {len(batches)} batch numbers for item {item.item_code}")
-                                
-#                                 # Delete existing batch records for this item
-#                                 GRPOTransferBatch.query.filter_by(item_id=item.id).delete()
-                                
-#                                 # Create new batch records
-#                                 for batch_info in batches:
-#                                     batch_number = batch_info.get('BatchNum')
-#                                     batch_quantity = float(batch_info.get('Quantity', 0))
-                                    
-#                                     # Validate batch_number is not None or empty
-#                                     if not batch_number or batch_number.strip() == '':
-#                                         logger.warning(f"⚠️ Skipping batch with NULL/empty batch_number")
-#                                         continue
-                                    
-#                                     # Create batch record
-#                                     batch = GRPOTransferBatch()
-#                                     batch.item_id = item.id
-#                                     batch.batch_number = batch_number
-#                                     batch.batch_quantity = batch_quantity
-#                                     batch.approved_quantity = 0
-#                                     batch.rejected_quantity = 0
-#                                     batch.qc_status = 'pending'
-                                    
-#                                     # Parse expiry date
-#                                     if 'ExpDate' in batch_info:
-#                                         try:
-#                                             exp_date_str = batch_info.get('ExpDate')
-#                                             batch.expiry_date = datetime.strptime(exp_date_str, '%Y%m%d').date()
-#                                         except Exception as e:
-#                                             logger.warning(f"Could not parse expiry date: {e}")
-                                    
-#                                     # Parse manufacture date
-#                                     if 'MnfDate' in batch_info:
-#                                         try:
-#                                             mnf_date_str = batch_info.get('MnfDate')
-#                                             batch.manufacture_date = datetime.strptime(mnf_date_str, '%Y%m%d').date()
-#                                         except Exception as e:
-#                                             logger.warning(f"Could not parse manufacture date: {e}")
-                                    
-#                                     db.session.add(batch)
-#                                     logger.info(f"✅ Added batch {batch_number} for item {item.item_code} with qty {batch_quantity}")
-#                             else:
-#                                 logger.warning(f"No batch numbers found for item {item.item_code}")
-#                                 # Delete any existing batch records if no batches found
-#                                 GRPOTransferBatch.query.filter_by(item_id=item.id).delete()
-#                         else:
-#                             logger.warning(f"Failed to fetch batch details: {batch_response.status_code}")
-#                     else:
-#                         # Non-batch item: delete any existing batch records
-#                         GRPOTransferBatch.query.filter_by(item_id=item.id).delete()
-#                         logger.info(f"Item {item.item_code} is non-batch - deleted any existing batch records")
-#                 else:
-#                     logger.warning(f"⚠️ Item {item.item_code} not found in SAP B1 - marking as non-managed")
-#                     item.is_non_managed = True
-#                     item.is_batch_item = False
-#                     item.is_serial_item = False
-#                     # Delete any existing batch records
-#                     GRPOTransferBatch.query.filter_by(item_id=item.id).delete()
-#             else:
-#                 logger.warning(f"⚠️ Failed to validate item {item.item_code}: {val_response.status_code}")
-#                 # Don't fail the update, just log the warning
-        
-#         # ============================================================================
-#         # STEP 3: Update item fields
-#         # ============================================================================
-#         if 'approved_quantity' in data:
-#             item.approved_quantity = float(data['approved_quantity'])
-#         if 'rejected_quantity' in data:
-#             item.rejected_quantity = float(data['rejected_quantity'])
-#         if 'qc_status' in data:
-#             item.qc_status = data['qc_status']
-#         if 'qc_notes' in data:
-#             item.qc_notes = data['qc_notes']
-#         if 'to_warehouse' in data:
-#             item.to_warehouse = data['to_warehouse']
-#         if 'to_bin_code' in data:
-#             item.to_bin_code = data['to_bin_code']
-#         if 'to_bin_abs_entry' in data:
-#             item.to_bin_abs_entry = data['to_bin_abs_entry']
-#         if 'from_warehouse' in data:
-#             item.from_warehouse = data['from_warehouse']
-#         if 'from_bin_code' in data:
-#             item.from_bin_code = data['from_bin_code']
-#         if 'from_bin_abs_entry' in data:
-#             item.from_bin_abs_entry = data['from_bin_abs_entry']
-        
-#          # ========================================================================
-#         # STEP 4: Commit changes
-#         # ========================================================================
-#         db.session.commit()
-
-#         return jsonify({
-#             'success': True,
-#             'message': 'Item updated successfully'
-#         })
-
-#     except Exception as e:
-#         db.session.rollback()
-#         logger.exception(f"❌ Error updating item {item_id}")
-
-#         return jsonify({
-#             'success': False,
-#             'error': str(e)
-#         }), 500
-
-# ============================================================================
-# STEP 8.7: Validate Item and Fetch Batch Details During Edit
-# ============================================================================
 
 @grpo_transfer_bp.route('/api/item/<int:item_id>/validate-and-fetch-batches', methods=['POST'])
 @login_required
@@ -2021,8 +1847,8 @@ def validate_item_and_fetch_batches(item_id):
                         batch.item_id = item.id
                         batch.batch_number = batch_number
                         batch.batch_quantity = batch_quantity
-                        batch.approved_quantity = 0
-                        batch.rejected_quantity = 0
+                        batch.approved_quantity = item.approved_quantity
+                        batch.rejected_quantity = item.rejected_quantity
                         batch.qc_status = 'pending'
                         
                         # Parse expiry date
@@ -2181,7 +2007,7 @@ def qc_approve_items(session_id):
             # ✅ NEW: Update from_warehouse and from_bin_code
             item.from_warehouse = item_approval.get('from_warehouse', item.from_warehouse)
             #item.from_bin_code = item_approval.get('from_bin_code', item.from_bin_code)
-            item.from_bin_abs_entry = item_approval.get('from_bin_abs_entry')  # ✅ NEW: Save from_bin AbsEntry
+            #item.from_bin_abs_entry = item_approval.get('from_bin_abs_entry')  # ✅ NEW: Save from_bin AbsEntry
             
             # ============================================================================
             # UPDATE BATCH QUANTITIES FOR BATCH ITEMS
@@ -2641,7 +2467,7 @@ def post_transfer_to_sap(session_id):
                         ],
                         'StockTransferLinesBinAllocations': []
                     }
-                    print("item.from_bin_abs_entry-->",item.from_bin_abs_entry)
+
                     # Add bin allocations if available
                     if item.from_bin_code and item.from_bin_abs_entry:
                         line['StockTransferLinesBinAllocations'].append({
@@ -2708,7 +2534,7 @@ def post_transfer_to_sap(session_id):
                 data = response.json()
                 session.transfer_doc_entry = data.get('DocEntry')
                 session.transfer_doc_num = data.get('DocNum')
-                session.status = 'transferred'
+                session.status = 'posted'
                 transfers_posted.append({
                     'type': 'approved',
                     'doc_entry': data.get('DocEntry'),
@@ -2718,6 +2544,7 @@ def post_transfer_to_sap(session_id):
                 logger.info(f"✅ Approved stock transfer posted to SAP B1 - DocEntry: {data.get('DocEntry')}, DocNum: {data.get('DocNum')}")
             else:
                 logger.error(f"SAP B1 API error: {response.status_code} - {response.text}")
+                session.status = response
                 return jsonify({
                     'success': False,
                     'error': f'Failed to post approved transfer: {response.status_code}'
@@ -2827,6 +2654,9 @@ def post_transfer_to_sap(session_id):
             
             if response.status_code in [200, 201]:
                 data = response.json()
+                session.rejected_doc_entry = data.get('DocEntry')
+                session.rejected_doc_num = data.get('DocNum')
+                session.rejected_doc_status = 'posted'
                 transfers_posted.append({
                     'type': 'rejected',
                     'doc_entry': data.get('DocEntry'),
@@ -2836,6 +2666,7 @@ def post_transfer_to_sap(session_id):
                 logger.info(f"✅ Rejected stock transfer posted to SAP B1 - DocEntry: {data.get('DocEntry')}, DocNum: {data.get('DocNum')}")
             else:
                 logger.error(f"SAP B1 API error: {response.status_code} - {response.text}")
+                session.rejected_doc_status = response
                 return jsonify({
                     'success': False,
                     'error': f'Failed to post rejected transfer: {response.status_code}'
@@ -2848,7 +2679,7 @@ def post_transfer_to_sap(session_id):
         log = GRPOTransferLog(
             session_id=session_id,
             user_id=current_user.id,
-            action='transferred',
+            action='posted',
             description=f'Posted to SAP B1 - Transfers: {json.dumps(transfers_posted)}',
             sap_response=json.dumps(transfers_posted)
         )
@@ -3020,7 +2851,7 @@ def post_approved_transfer_to_sap(session_id):
             data = response.json()
             session.transfer_doc_entry = data.get('DocEntry')
             session.transfer_doc_num = data.get('DocNum')
-            session.status = 'transferred'
+            session.status = 'posted'
             db.session.commit()
             
             # Log activity

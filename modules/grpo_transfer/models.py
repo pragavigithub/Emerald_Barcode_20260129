@@ -21,13 +21,15 @@ class GRPOTransferSession(db.Model):
     doc_date = db.Column(db.Date, nullable=False)
     doc_due_date = db.Column(db.Date, nullable=True)
     doc_total = db.Column(db.Float, default=0.0)
-    status = db.Column(db.String(20), default='draft')  # draft, in_progress, completed, transferred
+    status = db.Column(db.String(255), default='draft')  # draft, in_progress, completed, transferred
     qc_approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     transfer_doc_entry = db.Column(db.Integer, nullable=True)  # SAP B1 StockTransfer DocEntry
     transfer_doc_num = db.Column(db.String(50), nullable=True)  # SAP B1 StockTransfer DocNum
+    rejected_doc_entry = db.Column(db.Integer, nullable=True)  # SAP B1 StockTransfer DocEntry
+    rejected_doc_num = db.Column(db.String(50), nullable=True)  # SAP B1 StockTransfer DocNum
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    rejected_doc_status = db.Column(db.String(255), default='draft')  # draft, in_progress, completed, transferred
     # Relationships
     items = db.relationship('GRPOTransferItem', backref='session', lazy=True, cascade='all, delete-orphan')
     logs = db.relationship('GRPOTransferLog', backref='session', lazy=True, cascade='all, delete-orphan')

@@ -20,44 +20,44 @@
     </div>
 
     <!-- Quick Stats -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body text-center">
-                    <i data-feather="inbox" class="mb-2" style="width: 32px; height: 32px;"></i>
-                    <h6>Active Sessions</h6>
-                    <h3 id="activeSessions">0</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body text-center">
-                    <i data-feather="check-circle" class="mb-2" style="width: 32px; height: 32px;"></i>
-                    <h6>Approved Items</h6>
-                    <h3 id="approvedItems">0</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body text-center">
-                    <i data-feather="x-circle" class="mb-2" style="width: 32px; height: 32px;"></i>
-                    <h6>Rejected Items</h6>
-                    <h3 id="rejectedItems">0</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body text-center">
-                    <i data-feather="send" class="mb-2" style="width: 32px; height: 32px;"></i>
-                    <h6>Transferred</h6>
-                    <h3 id="transferred">0</h3>
-                </div>
-            </div>
-        </div>
-    </div>
+<!--    <div class="row mb-4">-->
+<!--        <div class="col-md-3">-->
+<!--            <div class="card">-->
+<!--                <div class="card-body text-center">-->
+<!--                    <i data-feather="inbox" class="mb-2" style="width: 32px; height: 32px;"></i>-->
+<!--                    <h6>Active Sessions</h6>-->
+<!--                    <h3 id="activeSessions">0</h3>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--        <div class="col-md-3">-->
+<!--            <div class="card">-->
+<!--                <div class="card-body text-center">-->
+<!--                    <i data-feather="check-circle" class="mb-2" style="width: 32px; height: 32px;"></i>-->
+<!--                    <h6>Approved Items</h6>-->
+<!--                    <h3 id="approvedItems">0</h3>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--        <div class="col-md-3">-->
+<!--            <div class="card">-->
+<!--                <div class="card-body text-center">-->
+<!--                    <i data-feather="x-circle" class="mb-2" style="width: 32px; height: 32px;"></i>-->
+<!--                    <h6>Rejected Items</h6>-->
+<!--                    <h3 id="rejectedItems">0</h3>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--        <div class="col-md-3">-->
+<!--            <div class="card">-->
+<!--                <div class="card-body text-center">-->
+<!--                    <i data-feather="send" class="mb-2" style="width: 32px; height: 32px;"></i>-->
+<!--                    <h6>Transferred</h6>-->
+<!--                    <h3 id="transferred">0</h3>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!--    </div>-->
 
     <!-- Main Content -->
     <div class="row">
@@ -349,7 +349,7 @@ function getStatusBadge(status) {
         'draft': '<span class="badge bg-secondary">Draft</span>',
         'in_progress': '<span class="badge bg-warning text-dark">In Progress</span>',
         'completed': '<span class="badge bg-success">Completed</span>',
-        'transferred': '<span class="badge bg-info">Transferred</span>'
+        'posted': '<span class="badge bg-info">Posted</span>'
     };
     return badges[status] || '<span class="badge bg-secondary">Unknown</span>';
 }
