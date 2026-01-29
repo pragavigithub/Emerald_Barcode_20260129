@@ -2749,7 +2749,7 @@ def post_transfer_to_sap(session_id):
                         'LineNum': line_num,
                         'ItemCode': item.item_code,
                         'Quantity': batch.rejected_quantity,
-                        'WarehouseCode': item.to_warehouse,  # Rejected warehouse
+                        'WarehouseCode': item.rejected_to_warehouse,  # Rejected warehouse
                         'FromWarehouseCode': item.from_warehouse,
                         'BaseEntry': item.sap_base_entry,
                         'BaseLine': item.sap_base_line,
@@ -2775,7 +2775,7 @@ def post_transfer_to_sap(session_id):
                     if item.to_bin_code and item.to_bin_abs_entry:
                         line['StockTransferLinesBinAllocations'].append({
                             'BinActionType': 'batToWarehouse',
-                            'BinAbsEntry': item.to_bin_abs_entry,
+                            'BinAbsEntry': item.rejected_to_bin_abs_entry,
                             'Quantity': batch.rejected_quantity,
                             'SerialAndBatchNumbersBaseLine': 0
                         })
@@ -2788,7 +2788,7 @@ def post_transfer_to_sap(session_id):
                     'LineNum': line_num,
                     'ItemCode': item.item_code,
                     'Quantity': item.rejected_quantity,
-                    'WarehouseCode': item.to_warehouse,  # Rejected warehouse
+                    'WarehouseCode': item.rejected_to_warehouse,  # Rejected warehouse
                     'FromWarehouseCode': item.from_warehouse,
                     'BaseEntry': item.sap_base_entry,
                     'BaseLine': item.sap_base_line,
@@ -2809,7 +2809,7 @@ def post_transfer_to_sap(session_id):
                 if item.to_bin_code and item.to_bin_abs_entry:
                     line['StockTransferLinesBinAllocations'].append({
                         'BinActionType': 'batToWarehouse',
-                        'BinAbsEntry': item.to_bin_abs_entry,
+                        'BinAbsEntry': item.rejected_to_bin_abs_entry,
                         'Quantity': item.rejected_quantity,
                         'SerialAndBatchNumbersBaseLine': 0
                     })
