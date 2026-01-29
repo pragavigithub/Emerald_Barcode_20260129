@@ -865,28 +865,28 @@ function displayLabelsInTab(labels) {
                              alt="QR Code" class="img-fluid mb-3" style="max-width: 150px;">
 
                         <div class="text-start small">
-                            <div class="mb-2">
-                                <strong>PO:</strong> ${qrData.session_code || 'N/A'}
-                            </div>
+<!--                            <div class="mb-2">-->
+<!--                                <strong>PO:</strong> ${qrData.session_code || 'N/A'}-->
+<!--                            </div>-->
                             <div class="mb-2">
                                 <strong>Item:</strong> ${qrData.item_code || 'N/A'}
                             </div>
                             <div class="mb-2">
-                                <strong>Batch:</strong> ${batchDisplay}
+                                <strong>Lot:</strong> ${batchDisplay}
                             </div>
                             <div class="mb-2">
                                 <strong>Qty:</strong> ${qrData.quantity || 1}
                             </div>
                             <div class="mb-2">
                                 <strong>From:</strong> ${qrData.from_warehouse || 'N/A'}
-                                ${qrData.from_bin_code ? ` (Bin: ${qrData.from_bin_code})` : ''}
+                                ${qrData.from_bin_code ? ` (Location: ${qrData.from_bin_code})` : ''}
                             </div>
                             <div class="mb-2">
                                 <strong>To:</strong> ${qrData.to_warehouse || 'N/A'}
-                                ${qrData.to_bin_code ? ` (Bin: ${qrData.to_bin_code})` : ''}
+                                ${qrData.to_bin_code ? ` (Location: ${qrData.to_bin_code})` : ''}
                             </div>
                             <div>
-                                <strong>Date:</strong> ${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}
+                                <strong>MnfDate:</strong> ${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}
                             </div>
                         </div>
                     </div>
@@ -1291,10 +1291,10 @@ function displayLabelsForPrint(labels) {
                     </div>
 
                     <div class="label-info">
-                        <div class="label-info-row">
-                            <div class="label-info-label">PO:</div>
-                            <div class="label-info-value">${qrData.session_code || 'N/A'}</div>
-                        </div>
+<!--                        <div class="label-info-row">-->
+<!--                            <div class="label-info-label">PO:</div>-->
+<!--                            <div class="label-info-value">${qrData.session_code || 'N/A'}</div>-->
+<!--                        </div>-->
 
                         <div class="label-info-row">
                             <div class="label-info-label">Item Code:</div>
@@ -1307,7 +1307,7 @@ function displayLabelsForPrint(labels) {
                         </div>
 
                         <div class="label-info-row">
-                            <div class="label-info-label">Batch:</div>
+                            <div class="label-info-label">Lot:</div>
                             <div class="label-info-value">${batchDisplay}</div>
                         </div>
 
@@ -1318,12 +1318,12 @@ function displayLabelsForPrint(labels) {
 
                         <div class="label-info-row">
                             <div class="label-info-label">From Warehouse:</div>
-                            <div class="label-info-value">${qrData.from_warehouse || 'N/A'}${qrData.from_bin_code ? ` (Bin: ${qrData.from_bin_code})` : ''}</div>
+                            <div class="label-info-value">${qrData.from_warehouse || 'N/A'}${qrData.from_bin_code ? ` (Loc: ${qrData.from_bin_code})` : ''}</div>
                         </div>
 
                         <div class="label-info-row">
                             <div class="label-info-label">To Warehouse:</div>
-                            <div class="label-info-value">${qrData.to_warehouse || 'N/A'}${qrData.to_bin_code ? ` (Bin: ${qrData.to_bin_code})` : ''}</div>
+                            <div class="label-info-value">${qrData.to_warehouse || 'N/A'}${qrData.to_bin_code ? ` (Loc: ${qrData.to_bin_code})` : ''}</div>
                         </div>
 
                         <div class="label-info-row">
@@ -1458,12 +1458,12 @@ function renderItemEditForm(item) {
                         <option value="">-- Select Warehouse --</option>
                     </select>
                 </div>
-<!--                <div class="col-md-6">-->
-<!--                    <label class="form-label">From Bin Code</label>-->
-<!--                    <select class="form-select" id="editFromBin" disabled>-->
-<!--                        <option value="">&#45;&#45; Select Bin &#45;&#45;</option>-->
-<!--                    </select>-->
-<!--                </div>-->
+                <div class="col-md-6">
+                    <label class="form-label">From Bin Code</label>
+                    <select class="form-select" id="editFromBin" disabled>
+                        <option value="">-- Select Bin --</option>
+                    </select>
+                </div>
             </div>
 
             <div class="row mb-3">
@@ -1513,9 +1513,9 @@ function renderItemEditForm(item) {
     loadWarehousesForEditBoth(item.from_warehouse, item.to_warehouse, item.from_bin_code, item.to_bin_code, item.rejected_to_warehouse, item.rejected_to_bin_code);
 
     // Add change listeners for warehouses to load bins
-<!--    document.getElementById('editFromWarehouse').addEventListener('change', function() {-->
-<!--        loadBinCodesForEdit(this.value, 'editFromBin', item.from_bin_code);-->
-<!--    });-->
+    document.getElementById('editFromWarehouse').addEventListener('change', function() {
+        loadBinCodesForEdit(this.value, 'editFromBin', item.from_bin_code);
+    });
 
     document.getElementById('editToWarehouse').addEventListener('change', function() {
         loadBinCodesForEdit(this.value, 'editToBin', item.to_bin_code);

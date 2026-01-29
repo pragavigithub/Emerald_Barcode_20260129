@@ -268,6 +268,42 @@ class SAPIntegration:
         except Exception as e:
             logging.error(f"Error getting bins: {str(e)}")
             return []
+    def get_bins_By_Bincode(self, bin_code):
+        """Get bins for a specific warehouse"""
+        if not self.ensure_logged_in():
+            return []
+
+        try:
+            url = f"{self.base_url}/b1s/v1/BinLocations?$filter=BinCode eq '{bin_code}'"
+            response = self.session.get(url)
+
+            if response.status_code == 200:
+                data = response.json()
+                bins = data.get('value', [])
+
+                # Transform the data to match our expected format
+                formatted_bins = []
+                for bin_data in bins:
+                    formatted_bins.append({
+                        'BinCode':
+                        bin_data.get('BinCode'),
+                        'Description':
+                        bin_data.get('Description', ''),
+                        'Warehouse':
+                        bin_data.get('Warehouse'),
+                        'Active':
+                        bin_data.get('Active', 'Y'),
+                        'AbsEntry' :
+                        bin_data.get('AbsEntry')
+                    })
+
+                return formatted_bins
+            else:
+                logging.error(f"Failed to get bins: {response.status_code}")
+                return []
+        except Exception as e:
+            logging.error(f"Error getting bins: {str(e)}")
+            return []
 
     def get_bin_locations_list(self, warehouse_code):
         """Get bin locations for a specific warehouse using SQL Query"""

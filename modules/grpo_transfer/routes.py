@@ -184,7 +184,7 @@ def create_session_view(doc_entry):
                 bin_info = sap.get_bin_location_details(item.from_bin_abs_entry)
                 if bin_info:
                     item.from_bin_code = bin_info.get("BinCode")
-
+                    item.from_bin_abs_entry=bin_info.get("AbsEntry")
             # ---------- ITEM TYPE ----------
             item_code = item.item_code
             val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
@@ -1650,11 +1650,11 @@ def update_item(item_id):
         if 'qc_notes' in data:
             item.qc_notes = data['qc_notes']
 
-        if 'from_warehouse' in data:
-            item.from_warehouse = data['from_warehouse']
+        # if 'from_warehouse' in data:
+        #     item.from_warehouse = data['from_warehouse']
 
-        if 'from_bin_code' in data:
-            item.from_bin_code = data['from_bin_code']
+        # if 'from_bin_code' in data:
+        #     item.from_bin_code = data['from_bin_code']
 
         if 'from_bin_abs_entry' in data:
             item.from_bin_abs_entry = data['from_bin_abs_entry']
@@ -1674,9 +1674,12 @@ def update_item(item_id):
 
         if 'approved_to_bin_code' in data:
             item.approved_to_bin_code = data['approved_to_bin_code']
-
-        if 'approved_to_bin_abs_entry' in data:
-            item.approved_to_bin_abs_entry = data['approved_to_bin_abs_entry']
+            print("item.approved_to_bin_code0--",item.approved_to_bin_code)
+            binDetails = sap.get_bins_By_Bincode(item.approved_to_bin_code)
+        #if 'approved_to_bin_abs_entry' in data:
+        if binDetails and isinstance(binDetails, list):
+            bin_row = binDetails[0]  # take first record
+            item.approved_to_bin_abs_entry = bin_row.get("AbsEntry")
 
         # ✅ NEW: Handle rejected warehouse/bin designation
         if 'rejected_to_warehouse' in data:
@@ -1684,10 +1687,12 @@ def update_item(item_id):
 
         if 'rejected_to_bin_code' in data:
             item.rejected_to_bin_code = data['rejected_to_bin_code']
-
-        if 'rejected_to_bin_abs_entry' in data:
-            item.rejected_to_bin_abs_entry = data['rejected_to_bin_abs_entry']
-
+            binDetails = sap.get_bins_By_Bincode(item.rejected_to_bin_code)
+        #if 'rejected_to_bin_abs_entry' in data:
+        if binDetails and isinstance(binDetails, list):
+                bin_row = binDetails[0]  # take first record
+                print("bin_row->",bin_row)
+                item.rejected_to_bin_abs_entry = bin_row.get("AbsEntry")
         # ==============================================================
         # STEP 4: Commit
         # ==============================================================
@@ -2171,11 +2176,11 @@ def qc_approve_items(session_id):
             item.qc_status = item_approval.get('qc_status', 'pending')
             item.qc_notes = item_approval.get('qc_notes')
             item.to_warehouse = item_approval.get('to_warehouse')
-            item.to_bin_code = item_approval.get('to_bin_code')
+            #item.to_bin_code = item_approval.get('to_bin_code')
             item.to_bin_abs_entry = item_approval.get('to_bin_abs_entry')  # ✅ NEW: Save to_bin AbsEntry
             # ✅ NEW: Update from_warehouse and from_bin_code
             item.from_warehouse = item_approval.get('from_warehouse', item.from_warehouse)
-            item.from_bin_code = item_approval.get('from_bin_code', item.from_bin_code)
+            #item.from_bin_code = item_approval.get('from_bin_code', item.from_bin_code)
             item.from_bin_abs_entry = item_approval.get('from_bin_abs_entry')  # ✅ NEW: Save from_bin AbsEntry
             
             # ============================================================================
@@ -2636,7 +2641,7 @@ def post_transfer_to_sap(session_id):
                         ],
                         'StockTransferLinesBinAllocations': []
                     }
-                    
+                    print("item.from_bin_abs_entry-->",item.from_bin_abs_entry)
                     # Add bin allocations if available
                     if item.from_bin_code and item.from_bin_abs_entry:
                         line['StockTransferLinesBinAllocations'].append({
