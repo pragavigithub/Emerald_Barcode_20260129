@@ -159,6 +159,13 @@
                             </a>
                         </li>
                         {% endif %}
+                        {% if current_user.has_permission('pick_list') %}
+                         <li>
+                            <a class="dropdown-item" href="{{ url_for('pick_list') }}">
+                                <i data-feather="check-square" style="width: 16px; height: 16px;"></i> Pick List Allocation
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </li>
                 {% endif %}
@@ -194,13 +201,7 @@
 <!--                    </a>-->
 <!--                </li>-->
 <!--                {% endif %}-->
-<!--                {% if current_user.has_permission('pick_list') %}-->
-<!--                <li class="nav-item">-->
-<!--                    <a class="nav-link" href="{{ url_for('pick_list') }}">-->
-<!--                        <i data-feather="list"></i> Pick List-->
-<!--                    </a>-->
-<!--                </li>-->
-<!--                {% endif %}-->
+
 <!--                {% if current_user.has_permission('bin_scanning') %}-->
 <!--                <li class="nav-item">-->
 <!--                    <a class="nav-link" href="{{ url_for('bin_scanning') }}">-->
