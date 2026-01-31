@@ -1270,216 +1270,440 @@ def api_get_line_serials():
         logging.error(f"Error getting line serials: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
 @sales_delivery_bp.route('/api/validate_serials_against_so', methods=['POST'])
 @login_required
 def api_validate_serials_against_so():
     """
     Validate entered serials against SAP Sales Order data.
-    Checks:
-    1. Serial exists in SO DocumentLines.SerialNumbers for the given ItemCode
-    2. Serial matches the warehouse code
-    3. Serial hasn't been allocated to another delivery item
-    
-    Returns validation results and adds validated serials to picked items grid.
+    - Prevent duplicate serials
+    - Append serials (do NOT delete existing)
+    - Enforce Sales Order Open Quantity
     """
     try:
         data = request.get_json()
-        print("Datat----->Vaidate JSON",data)
+        print("Validate JSON --->", data)
+
         delivery_id = data.get('delivery_id')
         doc_entry = data.get('doc_entry')
         base_line = data.get('base_line')
         item_code = data.get('item_code', '').strip()
         warehouse_code = data.get('warehouse_code', '').strip()
         serial_numbers = data.get('serial_numbers', [])
-        
-        if not delivery_id or not doc_entry or not item_code or not warehouse_code:
+
+        # -----------------------------
+        # Basic validations
+        # -----------------------------
+        if not delivery_id or not doc_entry or base_line is None \
+           or not item_code or not warehouse_code:
             return jsonify({
                 'success': False,
-                'error': 'Delivery ID, DocEntry, ItemCode, and WarehouseCode are required'
+                'error': 'Delivery ID, DocEntry, BaseLine, ItemCode and WarehouseCode are required'
             })
-        
+
         if not serial_numbers:
             return jsonify({
                 'success': False,
                 'error': 'At least one serial number is required'
             })
-        
+
+        # Remove blanks & normalize
+        serial_numbers = [s.strip() for s in serial_numbers if s.strip()]
+
+        # Prevent duplicate serials in SAME request
+        if len(set(serial_numbers)) != len(serial_numbers):
+            return jsonify({
+                'success': False,
+                'error': 'Duplicate serial numbers found in request'
+            })
+
+        # -----------------------------
+        # Security check
+        # -----------------------------
         delivery = DeliveryDocument.query.get(delivery_id)
         if not delivery or delivery.user_id != current_user.id:
             return jsonify({'success': False, 'error': 'Access denied'})
-        
-        # Fetch SO data from SAP
+
+        # -----------------------------
+        # Fetch Sales Order from SAP
+        # -----------------------------
         sap = SAPIntegration()
         so_data = sap.get_sales_order_by_doc_entry_I(doc_entry)
-        
+
         if not so_data:
             return jsonify({
                 'success': False,
-                'error': f'Sales Order with DocEntry {doc_entry} not found in SAP'
+                'error': f'Sales Order {doc_entry} not found in SAP'
             })
-        
-        # Find the line with matching ItemCode and WarehouseCode
+
+        # -----------------------------
+        # Find matching SO line
+        # -----------------------------
         so_line = None
         for line in so_data.get('DocumentLines', []):
-            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code and line.get('LineNum') == base_line:
+            if (
+                line.get('ItemCode') == item_code and
+                line.get('WarehouseCode') == warehouse_code and
+                line.get('LineNum') == base_line
+            ):
                 so_line = line
                 break
-        
+
         if not so_line:
             return jsonify({
                 'success': False,
-                'error': f'Line not found for ItemCode {item_code} in warehouse {warehouse_code}'
+                'error': 'Sales Order line not found'
             })
-        
-        # Build map of available serials from SO
-        available_serials_map = {}
-        if 'SerialNumbers' in so_line:
-            for serial in so_line['SerialNumbers']:
-                internal_sn = serial.get('InternalSerialNumber')
-                available_serials_map[internal_sn] = {
-                    'system_serial_number': serial.get('SystemSerialNumber'),
-                    'quantity': serial.get('Quantity', 1.0),
-                    'base_line_number': serial.get('BaseLineNumber'),
-                    'item_code': serial.get('ItemCode')
-                }
-        
-        # Get already allocated serials for this SO line
-        allocated_serials = db.session.query(DeliveryItemSerial.internal_serial_number).join(
-            DeliveryItem, DeliveryItemSerial.delivery_item_id == DeliveryItem.id
-        ).filter(
-            DeliveryItem.delivery_id == delivery_id,
-            DeliveryItem.base_line == so_line.get('LineNum')
-        ).all()
-        
-        allocated_set = {s[0] for s in allocated_serials}
-        
-        # Validate each entered serial
-        validation_results = []
-        valid_serials = []
-        invalid_serials = []
-        
-        for serial_num in serial_numbers:
-            serial_num = serial_num.strip()
-            if not serial_num:
-                continue
-            
-            result = {
-                'serial_number': serial_num,
-                'status': 'unknown',
-                'message': ''
+
+        open_qty = float(so_line.get('RemainingOpenQuantity', 0))
+
+        # -----------------------------
+        # Build SO serial map
+        # -----------------------------
+        available_serials = {}
+        for sn in so_line.get('SerialNumbers', []):
+            internal = sn.get('InternalSerialNumber')
+            available_serials[internal] = {
+                'system_serial_number': sn.get('SystemSerialNumber'),
+                'quantity': sn.get('Quantity', 1.0)
             }
-            
-            if serial_num not in available_serials_map:
-                result['status'] = 'not_found'
-                result['message'] = f'Serial {serial_num} not found in Sales Order for {item_code}'
-                invalid_serials.append(result)
-            elif serial_num in allocated_set:
-                result['status'] = 'already_allocated'
-                result['message'] = f'Serial {serial_num} already allocated to another delivery item'
-                invalid_serials.append(result)
-            else:
-                result['status'] = 'valid'
-                result['message'] = 'Serial validated successfully'
-                result['system_serial_number'] = available_serials_map[serial_num]['system_serial_number']
-                result['quantity'] = available_serials_map[serial_num]['quantity']
-                result['base_line_number'] = available_serials_map[serial_num]['base_line_number']
-                valid_serials.append(result)
-            
-            validation_results.append(result)
-        
-        # If there are invalid serials, return error with details
-        if invalid_serials:
-            return jsonify({
-                'success': False,
-                'error': f'Validation failed for {len(invalid_serials)} serial(s)',
-                'validation_results': validation_results,
-                'valid_count': len(valid_serials),
-                'invalid_count': len(invalid_serials),
-                'invalid_serials': invalid_serials
-            })
-        
-        if not valid_serials:
-            return jsonify({
-                'success': False,
-                'error': 'No valid serial numbers to add'
-            })
-        
-        # All serials are valid - add to delivery
-        base_line = so_line.get('LineNum')
-        
-        # Check if item already exists for this line
-        existing_item = DeliveryItem.query.filter_by(
+
+        # -----------------------------
+        # Existing Delivery Item
+        # -----------------------------
+        delivery_item = DeliveryItem.query.filter_by(
             delivery_id=delivery_id,
             base_line=base_line
         ).first()
-        
-        if existing_item:
-            # Update existing item quantity
-            existing_item.quantity = len(valid_serials)
-            delivery_item = existing_item
+
+        # Existing serials in DB
+        existing_serials = set()
+        existing_serial_count = 0
+
+        if delivery_item:
+            rows = DeliveryItemSerial.query.filter_by(
+                delivery_item_id=delivery_item.id
+            ).all()
+            existing_serials = {r.internal_serial_number for r in rows}
+            existing_serial_count = len(existing_serials)
+
+        # -----------------------------
+        # Validate serials
+        # -----------------------------
+        valid_serials = []
+        validation_results = []
+
+        for serial in serial_numbers:
+            result = {
+                'serial_number': serial,
+                'status': '',
+                'message': ''
+            }
+
+            if serial not in available_serials:
+                result['status'] = 'not_found'
+                result['message'] = 'Serial not found in Sales Order'
+            elif serial in existing_serials:
+                result['status'] = 'duplicate'
+                result['message'] = 'Serial already added to delivery'
+            else:
+                result['status'] = 'valid'
+                result['message'] = 'Serial validated'
+                result.update(available_serials[serial])
+                valid_serials.append(result)
+
+            validation_results.append(result)
+
+        if not valid_serials:
+            return jsonify({
+                'success': False,
+                'error': 'No valid serial numbers to add',
+                'validation_results': validation_results
+            })
+
+        # -----------------------------
+        # Open Quantity check
+        # -----------------------------
+        if existing_serial_count + len(valid_serials) > open_qty:
+            return jsonify({
+                'success': False,
+                'error': (
+                    f'Open quantity exceeded. '
+                    f'Open: {open_qty}, '
+                    f'Already added: {existing_serial_count}, '
+                    f'Attempted: {len(valid_serials)}'
+                )
+            })
+
+        # -----------------------------
+        # Create or update DeliveryItem
+        # -----------------------------
+        if delivery_item:
+            delivery_item.quantity = existing_serial_count + len(valid_serials)
         else:
-            # Create new delivery item
-            next_line_num = db.session.query(db.func.max(DeliveryItem.line_number)).filter_by(
-                delivery_id=delivery_id
-            ).scalar() or 0
-            
+            next_line = db.session.query(
+                db.func.max(DeliveryItem.line_number)
+            ).filter_by(delivery_id=delivery_id).scalar() or 0
+
             delivery_item = DeliveryItem(
                 delivery_id=delivery_id,
-                line_number=next_line_num + 1,
+                line_number=next_line + 1,
                 base_line=base_line,
                 item_code=item_code,
                 item_description=so_line.get('ItemDescription', ''),
                 warehouse_code=warehouse_code,
                 quantity=len(valid_serials),
-                open_quantity=so_line.get('RemainingOpenQuantity', 0),
+                open_quantity=open_qty,
                 unit_price=so_line.get('UnitPrice', 0),
                 uom_code=so_line.get('UoMCode'),
                 serial_required=True
             )
             db.session.add(delivery_item)
             db.session.flush()
-        
-        # Clear existing serials if updating
-        if existing_item:
-            DeliveryItemSerial.query.filter_by(delivery_item_id=delivery_item.id).delete()
-        
-        # Add validated serials
-        for serial_data in valid_serials:
-            serial_obj = DeliveryItemSerial(
+
+        # -----------------------------
+        # Insert NEW serials only
+        # -----------------------------
+        for s in valid_serials:
+            db.session.add(DeliveryItemSerial(
                 delivery_item_id=delivery_item.id,
-                internal_serial_number=serial_data['serial_number'],
-                system_serial_number=serial_data.get('system_serial_number', 0),
-                quantity=serial_data.get('quantity', 1.0),
-                base_line_number=serial_data.get('base_line_number', base_line),
+                internal_serial_number=s['serial_number'],
+                system_serial_number=s.get('system_serial_number', 0),
+                quantity=s.get('quantity', 1.0),
+                base_line_number=base_line,
                 allocation_status='allocated'
-            )
-            db.session.add(serial_obj)
-        
+            ))
+
         db.session.commit()
-        
-        logging.info(f"✅ Validated and added {len(valid_serials)} serials to delivery {delivery_id}, line {base_line}")
-        
+
         return jsonify({
             'success': True,
-            'message': f'Successfully validated and added {len(valid_serials)} serial number(s)',
-            'validation_results': validation_results,
+            'message': f'Added {len(valid_serials)} serial(s) successfully',
             'valid_count': len(valid_serials),
-            'item_id': delivery_item.id,
-            'line_number': delivery_item.line_number,
+            'total_quantity': delivery_item.quantity,
+            'validation_results': validation_results,
             'picked_item': {
-                'id': delivery_item.id,
-                'line_number': delivery_item.line_number,
                 'item_code': delivery_item.item_code,
-                'item_description': delivery_item.item_description,
                 'quantity': delivery_item.quantity,
-                'warehouse_code': delivery_item.warehouse_code,
-                'unit_price': delivery_item.unit_price,
-                'serial_numbers': [s['serial_number'] for s in valid_serials]
+                'serial_numbers': list(existing_serials) +
+                                  [s['serial_number'] for s in valid_serials]
             }
         })
-        
+
     except Exception as e:
-        logging.error(f"Error validating serials against SO: {str(e)}")
+        logging.error(f"Serial validation error: {str(e)}")
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# @sales_delivery_bp.route('/api/validate_serials_against_so', methods=['POST'])
+# @login_required
+# def api_validate_serials_against_so():
+#     """
+#     Validate entered serials against SAP Sales Order data.
+#     Checks:
+#     1. Serial exists in SO DocumentLines.SerialNumbers for the given ItemCode
+#     2. Serial matches the warehouse code
+#     3. Serial hasn't been allocated to another delivery item
+#
+#     Returns validation results and adds validated serials to picked items grid.
+#     """
+#     try:
+#         data = request.get_json()
+#         print("Datat----->Vaidate JSON",data)
+#         delivery_id = data.get('delivery_id')
+#         doc_entry = data.get('doc_entry')
+#         base_line = data.get('base_line')
+#         item_code = data.get('item_code', '').strip()
+#         warehouse_code = data.get('warehouse_code', '').strip()
+#         serial_numbers = data.get('serial_numbers', [])
+#
+#         if not delivery_id or not doc_entry or not item_code or not warehouse_code:
+#             return jsonify({
+#                 'success': False,
+#                 'error': 'Delivery ID, DocEntry, ItemCode, and WarehouseCode are required'
+#             })
+#
+#         if not serial_numbers:
+#             return jsonify({
+#                 'success': False,
+#                 'error': 'At least one serial number is required'
+#             })
+#
+#         delivery = DeliveryDocument.query.get(delivery_id)
+#         if not delivery or delivery.user_id != current_user.id:
+#             return jsonify({'success': False, 'error': 'Access denied'})
+#
+#         # Fetch SO data from SAP
+#         sap = SAPIntegration()
+#         so_data = sap.get_sales_order_by_doc_entry_I(doc_entry)
+#
+#         if not so_data:
+#             return jsonify({
+#                 'success': False,
+#                 'error': f'Sales Order with DocEntry {doc_entry} not found in SAP'
+#             })
+#
+#         # Find the line with matching ItemCode and WarehouseCode
+#         so_line = None
+#         for line in so_data.get('DocumentLines', []):
+#             if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code and line.get('LineNum') == base_line:
+#                 so_line = line
+#                 break
+#
+#         if not so_line:
+#             return jsonify({
+#                 'success': False,
+#                 'error': f'Line not found for ItemCode {item_code} in warehouse {warehouse_code}'
+#             })
+#
+#         # Build map of available serials from SO
+#         available_serials_map = {}
+#         if 'SerialNumbers' in so_line:
+#             for serial in so_line['SerialNumbers']:
+#                 internal_sn = serial.get('InternalSerialNumber')
+#                 available_serials_map[internal_sn] = {
+#                     'system_serial_number': serial.get('SystemSerialNumber'),
+#                     'quantity': serial.get('Quantity', 1.0),
+#                     'base_line_number': serial.get('BaseLineNumber'),
+#                     'item_code': serial.get('ItemCode')
+#                 }
+#
+#         # Get already allocated serials for this SO line
+#         allocated_serials = db.session.query(DeliveryItemSerial.internal_serial_number).join(
+#             DeliveryItem, DeliveryItemSerial.delivery_item_id == DeliveryItem.id
+#         ).filter(
+#             DeliveryItem.delivery_id == delivery_id,
+#             DeliveryItem.base_line == so_line.get('LineNum')
+#         ).all()
+#
+#         allocated_set = {s[0] for s in allocated_serials}
+#
+#         # Validate each entered serial
+#         validation_results = []
+#         valid_serials = []
+#         invalid_serials = []
+#
+#         for serial_num in serial_numbers:
+#             serial_num = serial_num.strip()
+#             if not serial_num:
+#                 continue
+#
+#             result = {
+#                 'serial_number': serial_num,
+#                 'status': 'unknown',
+#                 'message': ''
+#             }
+#
+#             if serial_num not in available_serials_map:
+#                 result['status'] = 'not_found'
+#                 result['message'] = f'Serial {serial_num} not found in Sales Order for {item_code}'
+#                 invalid_serials.append(result)
+#             elif serial_num in allocated_set:
+#                 result['status'] = 'already_allocated'
+#                 result['message'] = f'Serial {serial_num} already allocated to another delivery item'
+#                 invalid_serials.append(result)
+#             else:
+#                 result['status'] = 'valid'
+#                 result['message'] = 'Serial validated successfully'
+#                 result['system_serial_number'] = available_serials_map[serial_num]['system_serial_number']
+#                 result['quantity'] = available_serials_map[serial_num]['quantity']
+#                 result['base_line_number'] = available_serials_map[serial_num]['base_line_number']
+#                 valid_serials.append(result)
+#
+#             validation_results.append(result)
+#
+#         # If there are invalid serials, return error with details
+#         if invalid_serials:
+#             return jsonify({
+#                 'success': False,
+#                 'error': f'Validation failed for {len(invalid_serials)} serial(s)',
+#                 'validation_results': validation_results,
+#                 'valid_count': len(valid_serials),
+#                 'invalid_count': len(invalid_serials),
+#                 'invalid_serials': invalid_serials
+#             })
+#
+#         if not valid_serials:
+#             return jsonify({
+#                 'success': False,
+#                 'error': 'No valid serial numbers to add'
+#             })
+#
+#         # All serials are valid - add to delivery
+#         base_line = so_line.get('LineNum')
+#
+#         # Check if item already exists for this line
+#         existing_item = DeliveryItem.query.filter_by(
+#             delivery_id=delivery_id,
+#             base_line=base_line
+#         ).first()
+#
+#         if existing_item:
+#             # Update existing item quantity
+#             existing_item.quantity = len(valid_serials)
+#             delivery_item = existing_item
+#         else:
+#             # Create new delivery item
+#             next_line_num = db.session.query(db.func.max(DeliveryItem.line_number)).filter_by(
+#                 delivery_id=delivery_id
+#             ).scalar() or 0
+#
+#             delivery_item = DeliveryItem(
+#                 delivery_id=delivery_id,
+#                 line_number=next_line_num + 1,
+#                 base_line=base_line,
+#                 item_code=item_code,
+#                 item_description=so_line.get('ItemDescription', ''),
+#                 warehouse_code=warehouse_code,
+#                 quantity=len(valid_serials),
+#                 open_quantity=so_line.get('RemainingOpenQuantity', 0),
+#                 unit_price=so_line.get('UnitPrice', 0),
+#                 uom_code=so_line.get('UoMCode'),
+#                 serial_required=True
+#             )
+#             db.session.add(delivery_item)
+#             db.session.flush()
+#
+#         # Clear existing serials if updating
+#         if existing_item:
+#             DeliveryItemSerial.query.filter_by(delivery_item_id=delivery_item.id).delete()
+#
+#         # Add validated serials
+#         for serial_data in valid_serials:
+#             serial_obj = DeliveryItemSerial(
+#                 delivery_item_id=delivery_item.id,
+#                 internal_serial_number=serial_data['serial_number'],
+#                 system_serial_number=serial_data.get('system_serial_number', 0),
+#                 quantity=serial_data.get('quantity', 1.0),
+#                 base_line_number=serial_data.get('base_line_number', base_line),
+#                 allocation_status='allocated'
+#             )
+#             db.session.add(serial_obj)
+#
+#         db.session.commit()
+#
+#         logging.info(f"✅ Validated and added {len(valid_serials)} serials to delivery {delivery_id}, line {base_line}")
+#
+#         return jsonify({
+#             'success': True,
+#             'message': f'Successfully validated and added {len(valid_serials)} serial number(s)',
+#             'validation_results': validation_results,
+#             'valid_count': len(valid_serials),
+#             'item_id': delivery_item.id,
+#             'line_number': delivery_item.line_number,
+#             'picked_item': {
+#                 'id': delivery_item.id,
+#                 'line_number': delivery_item.line_number,
+#                 'item_code': delivery_item.item_code,
+#                 'item_description': delivery_item.item_description,
+#                 'quantity': delivery_item.quantity,
+#                 'warehouse_code': delivery_item.warehouse_code,
+#                 'unit_price': delivery_item.unit_price,
+#                 'serial_numbers': [s['serial_number'] for s in valid_serials]
+#             }
+#         })
+#
+#     except Exception as e:
+#         logging.error(f"Error validating serials against SO: {str(e)}")
+#         db.session.rollback()
+#         return jsonify({'success': False, 'error': str(e)}), 500
