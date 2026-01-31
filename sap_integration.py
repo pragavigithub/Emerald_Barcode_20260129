@@ -859,45 +859,103 @@ class SAPIntegration:
             logging.error(f"Error fetching open SOs for series {series}: {str(e)}")
             return []
 
+    # def get_sales_order_by_doc_entry(self, doc_entry):
+    #     """Get Sales Order details from SAP B1 using DocEntry - only open documents and lines"""
+    #     if not self.ensure_logged_in():
+    #         logging.warning("SAP B1 not available, returning None")
+    #         return None
+    #
+    #     try:
+    #         url = f"{self.base_url}/b1s/v1/Orders?$filter=DocEntry eq {doc_entry}"
+    #         response = self.session.get(url, timeout=30)
+    #         if response.status_code == 200:
+    #             data = response.json()
+    #             if data.get('value'):
+    #                 so_data = data['value'][0]
+    #                 # Filter for open documents only
+    #                 if so_data.get('DocumentStatus') != 'bost_Open':
+    #                     logging.warning(f"Sales Order {doc_entry} is not open (Status: {so_data.get('DocumentStatus')})")
+    #                     return None
+    #
+    #                 # Filter for open lines only
+    #                 if 'DocumentLines' in so_data:
+    #                     open_lines = [
+    #                         line for line in so_data['DocumentLines']
+    #                         if line.get('LineStatus') == 'bost_Open'
+    #                     ]
+    #                     so_data['DocumentLines'] = open_lines
+    #
+    #                     if not open_lines:
+    #                         logging.warning(f"Sales Order {doc_entry} has no open lines")
+    #                         return None
+    #
+    #                 logging.info(f"✅ Retrieved SO DocEntry: {doc_entry}, DocNum: {so_data.get('DocNum')}, Open Lines: {len(so_data.get('DocumentLines', []))}")
+    #                 return so_data
+    #             else:
+    #                 logging.warning(f"No Sales Order found for DocEntry: {doc_entry}")
+    #                 return None
+    #         else:
+    #             logging.warning(f"Failed to get Sales Order by DocEntry: {response.status_code}")
+    #             return None
+    #
+    #     except Exception as e:
+    #         logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
+    #         return None
     def get_sales_order_by_doc_entry(self, doc_entry):
-        """Get Sales Order details from SAP B1 using DocEntry - only open documents and lines"""
+        """Get Sales Order details from SAP B1 using DocEntry - only open documents and open lines (CrossJoin)"""
         if not self.ensure_logged_in():
             logging.warning("SAP B1 not available, returning None")
             return None
 
         try:
-            url = f"{self.base_url}/b1s/v1/Orders?$filter=DocEntry eq {doc_entry}"
+            url = (
+                f"{self.base_url}/b1s/v1/$crossjoin(Orders,Orders/DocumentLines)"
+                f"?$expand="
+                f"Orders($select=DocEntry,DocNum,CardCode,CardName,DocumentStatus,Series,DocDate,DocDueDate),"
+                f"Orders/DocumentLines($select=LineNum,ItemCode,ItemDescription,Quantity,"
+                f"WarehouseCode,LineStatus,RemainingOpenQuantity,UnitPrice)"
+                f"&$filter="
+                f"Orders/DocEntry eq Orders/DocumentLines/DocEntry "
+                f"and Orders/DocumentStatus eq 'bost_Open' "
+                f"and Orders/DocumentLines/LineStatus eq 'bost_Open' "
+                f"and Orders/DocEntry eq {doc_entry}"
+            )
+
             response = self.session.get(url, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('value'):
-                    so_data = data['value'][0]
-                    # Filter for open documents only
-                    if so_data.get('DocumentStatus') != 'bost_Open':
-                        logging.warning(f"Sales Order {doc_entry} is not open (Status: {so_data.get('DocumentStatus')})")
-                        return None
-                    
-                    # Filter for open lines only
-                    if 'DocumentLines' in so_data:
-                        open_lines = [
-                            line for line in so_data['DocumentLines']
-                            if line.get('LineStatus') == 'bost_Open'
-                        ]
-                        so_data['DocumentLines'] = open_lines
-                        
-                        if not open_lines:
-                            logging.warning(f"Sales Order {doc_entry} has no open lines")
-                            return None
-                    
-                    logging.info(f"✅ Retrieved SO DocEntry: {doc_entry}, DocNum: {so_data.get('DocNum')}, Open Lines: {len(so_data.get('DocumentLines', []))}")
-                    return so_data
-                else:
-                    logging.warning(f"No Sales Order found for DocEntry: {doc_entry}")
-                    return None
-            else:
-                logging.warning(f"Failed to get Sales Order by DocEntry: {response.status_code}")
+
+            if response.status_code != 200:
+                logging.warning(f"Failed to get Sales Order by DocEntry {doc_entry}: {response.status_code}")
                 return None
-                
+
+            data = response.json()
+            values = data.get("value", [])
+
+            if not values:
+                logging.warning(f"No open Sales Order / lines found for DocEntry: {doc_entry}")
+                return None
+
+            # 🔹 Build Sales Order header once
+            order_header = values[0]["Orders"]
+            order_header["DocumentLines"] = []
+
+            # 🔹 Collect open lines
+            for row in values:
+                line = row.get("Orders/DocumentLines")
+                if line:
+                    order_header["DocumentLines"].append(line)
+
+            if not order_header["DocumentLines"]:
+                logging.warning(f"Sales Order {doc_entry} has no open lines")
+                return None
+
+            logging.info(
+                f"✅ Retrieved SO DocEntry: {doc_entry}, "
+                f"DocNum: {order_header.get('DocNum')}, "
+                f"Open Lines: {len(order_header['DocumentLines'])}"
+            )
+
+            return order_header
+
         except Exception as e:
             logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
             return None
@@ -1034,8 +1092,8 @@ class SAPIntegration:
             }
         
         try:
-            filter_query = f"ItemCode eq '{item_code}' and WhsCode eq '{warehouse_code}' and Status eq 0"
-            url = f"{self.base_url}/b1s/v1/SerialNumberDetails?$filter={filter_query}&$select=DistNumber,SystemNumber,ItemCode,WhsCode,Status"
+            filter_query = f"ItemCode eq '{item_code}'"
+            url = f"{self.base_url}/b1s/v1/SerialNumberDetails?$filter={filter_query}&$select=SerialNumber,AdmissionDate"
             
             headers = {"Prefer": "odata.maxpagesize=500"}
             logging.info(f"🔍 Fetching available serials for {item_code} in {warehouse_code}")

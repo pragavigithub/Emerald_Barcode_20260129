@@ -13,6 +13,59 @@ sales_delivery_bp = Blueprint('sales_delivery', __name__,
                               url_prefix='/sales_delivery')
 
 
+# @sales_delivery_bp.route('/')
+# @login_required
+# def index():
+#     """Main page for Sales Order Against Delivery with filtering, search and pagination"""
+#     page = request.args.get('page', 1, type=int)
+#     per_page = request.args.get('per_page', 10, type=int)
+#     search_term = request.args.get('search', '').strip()
+#     from_date = request.args.get('from_date', '').strip()
+#     to_date = request.args.get('to_date', '').strip()
+#
+#     query = DeliveryDocument.query.filter_by(user_id=current_user.id)
+#
+#     if search_term:
+#         query = query.filter(
+#             db.or_(
+#                 DeliveryDocument.so_doc_num.ilike(f'%{search_term}%'),
+#                 DeliveryDocument.card_name.ilike(f'%{search_term}%'),
+#                 DeliveryDocument.card_code.ilike(f'%{search_term}%'),
+#                 DeliveryDocument.sap_doc_num.ilike(f'%{search_term}%')
+#             )
+#         )
+#
+#     if from_date:
+#         try:
+#             from_dt = datetime.strptime(from_date, '%Y-%m-%d')
+#             query = query.filter(DeliveryDocument.created_at >= from_dt)
+#         except ValueError:
+#             pass
+#
+#     if to_date:
+#         try:
+#             to_dt = datetime.strptime(to_date, '%Y-%m-%d')
+#             to_dt = to_dt.replace(hour=23, minute=59, second=59)
+#             query = query.filter(DeliveryDocument.created_at <= to_dt)
+#         except ValueError:
+#             pass
+#
+#     query = query.order_by(DeliveryDocument.created_at.desc())
+#
+#     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+#     deliveries = pagination.items
+#
+#     return render_template('sales_delivery/sales_delivery_index.html',
+#                          deliveries=deliveries,
+#                          per_page=per_page,
+#                          search_term=search_term,
+#                          from_date=from_date,
+#                          to_date=to_date,
+#                          pagination=pagination)
+
+from flask import request, jsonify
+
+
 @sales_delivery_bp.route('/')
 @login_required
 def index():
@@ -22,9 +75,9 @@ def index():
     search_term = request.args.get('search', '').strip()
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
-    
+
     query = DeliveryDocument.query.filter_by(user_id=current_user.id)
-    
+
     if search_term:
         query = query.filter(
             db.or_(
@@ -34,14 +87,14 @@ def index():
                 DeliveryDocument.sap_doc_num.ilike(f'%{search_term}%')
             )
         )
-    
+
     if from_date:
         try:
             from_dt = datetime.strptime(from_date, '%Y-%m-%d')
             query = query.filter(DeliveryDocument.created_at >= from_dt)
         except ValueError:
             pass
-    
+
     if to_date:
         try:
             to_dt = datetime.strptime(to_date, '%Y-%m-%d')
@@ -49,19 +102,46 @@ def index():
             query = query.filter(DeliveryDocument.created_at <= to_dt)
         except ValueError:
             pass
-    
+
     query = query.order_by(DeliveryDocument.created_at.desc())
-    
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     deliveries = pagination.items
-    
-    return render_template('sales_delivery/sales_delivery_index.html', 
-                         deliveries=deliveries,
-                         per_page=per_page,
-                         search_term=search_term,
-                         from_date=from_date,
-                         to_date=to_date,
-                         pagination=pagination)
+
+    # 🔹 JSON response when request expects JSON
+    if request.headers.get('Content-Type') == 'application/json' or request.accept_mimetypes.best == 'application/json':
+        return jsonify({
+            "success": True,
+            "data": [
+                {
+                    "id": d.id,
+                    "so_doc_num": d.so_doc_num,
+                    "card_code": d.card_code,
+                    "card_name": d.card_name,
+                    "sap_doc_num": d.sap_doc_num,
+                    "created_at": d.created_at.isoformat()
+                } for d in deliveries
+            ],
+            "pagination": {
+                "page": pagination.page,
+                "per_page": pagination.per_page,
+                "total": pagination.total,
+                "pages": pagination.pages,
+                "has_next": pagination.has_next,
+                "has_prev": pagination.has_prev
+            }
+        }), 200
+
+    # 🔹 Default HTML response (unchanged)
+    return render_template(
+        'sales_delivery/sales_delivery_index.html',
+        deliveries=deliveries,
+        per_page=per_page,
+        search_term=search_term,
+        from_date=from_date,
+        to_date=to_date,
+        pagination=pagination
+    )
 
 
 @sales_delivery_bp.route('/create', methods=['GET', 'POST'])
@@ -129,26 +209,82 @@ def create():
     return redirect(url_for('sales_delivery.index'))
 
 
+# @sales_delivery_bp.route('/detail/<int:delivery_id>')
+# @login_required
+# def detail(delivery_id):
+#     """Detail page for a delivery note"""
+#     delivery = DeliveryDocument.query.get_or_404(delivery_id)
+#
+#     if delivery.user_id != current_user.id:
+#         flash('Access denied', 'error')
+#         return redirect(url_for('sales_delivery.index'))
+#
+#     sap = SAPIntegration()
+#     so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+#
+#     if not so_data:
+#         flash('Unable to load Sales Order details from SAP', 'error')
+#         return redirect(url_for('sales_delivery.index'))
+#
+#     return render_template('sales_delivery/sales_delivery_detail.html',
+#                          delivery=delivery,
+#                          so_data=so_data)
+
+from flask import jsonify, request
+
+
 @sales_delivery_bp.route('/detail/<int:delivery_id>')
 @login_required
 def detail(delivery_id):
     """Detail page for a delivery note"""
     delivery = DeliveryDocument.query.get_or_404(delivery_id)
-    
+
     if delivery.user_id != current_user.id:
+        if request.headers.get(
+                'Content-Type') == 'application/json' or request.accept_mimetypes.best == 'application/json':
+            return jsonify({
+                "success": False,
+                "message": "Access denied"
+            }), 403
+
         flash('Access denied', 'error')
         return redirect(url_for('sales_delivery.index'))
-    
+
     sap = SAPIntegration()
     so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
-    
+
     if not so_data:
+        if request.headers.get(
+                'Content-Type') == 'application/json' or request.accept_mimetypes.best == 'application/json':
+            return jsonify({
+                "success": False,
+                "message": "Unable to load Sales Order details from SAP"
+            }), 400
+
         flash('Unable to load Sales Order details from SAP', 'error')
         return redirect(url_for('sales_delivery.index'))
-    
-    return render_template('sales_delivery/sales_delivery_detail.html', 
-                         delivery=delivery,
-                         so_data=so_data)
+
+    # 🔹 JSON response
+    if request.headers.get('Content-Type') == 'application/json' or request.accept_mimetypes.best == 'application/json':
+        return jsonify({
+            "success": True,
+            "delivery": {
+                "id": delivery.id,
+                "so_doc_entry": delivery.so_doc_entry,
+                "so_doc_num": delivery.so_doc_num,
+                "card_code": delivery.card_code,
+                "card_name": delivery.card_name,
+                "created_at": delivery.created_at.isoformat()
+            },
+            "sales_order": so_data
+        }), 200
+
+    # 🔹 Existing HTML response (unchanged)
+    return render_template(
+        'sales_delivery/sales_delivery_detail.html',
+        delivery=delivery,
+        so_data=so_data
+    )
 
 
 @sales_delivery_bp.route('/api/get_series')
@@ -753,6 +889,7 @@ def api_validate_serial_availability():
     """Validate if a serial number is available in the Sales Order DocumentLines"""
     try:
         data = request.get_json()
+        print("datavalidate_serial_availability--->",data)
         serial_number = data.get('serial_number', '').strip()
         item_code = data.get('item_code', '').strip()
         warehouse_code = data.get('warehouse_code', '').strip()
@@ -1146,6 +1283,7 @@ def api_validate_serials_against_so():
     """
     try:
         data = request.get_json()
+        print("Datat----->Vaidate JSON",data)
         delivery_id = data.get('delivery_id')
         doc_entry = data.get('doc_entry')
         item_code = data.get('item_code', '').strip()
