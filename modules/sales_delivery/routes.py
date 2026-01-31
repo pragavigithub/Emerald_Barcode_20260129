@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
-from modules.sales_delivery.models import DeliveryDocument, DeliveryItem
+from modules.sales_delivery.models import DeliveryDocument, DeliveryItem, DeliveryItemSerial
 from sap_integration import SAPIntegration
 from datetime import datetime
 from pathlib import Path
@@ -203,6 +203,7 @@ def api_add_item():
     quantity = data.get('quantity')
     batch_number = data.get('batch_number')
     serial_number = data.get('serial_number')
+    serial_numbers = data.get('serial_numbers', [])
     
     if not all([delivery_id, base_line is not None, item_code, quantity]):
         return jsonify({'success': False, 'error': 'Missing required fields'})
@@ -251,6 +252,28 @@ def api_add_item():
     )
     
     db.session.add(item)
+    db.session.flush()
+    
+    # If serial numbers are provided, allocate them
+    if serial_numbers:
+        serial_map = {}
+        if 'SerialNumbers' in so_line:
+            for serial in so_line['SerialNumbers']:
+                serial_map[serial.get('InternalSerialNumber')] = serial
+        
+        for serial_num in serial_numbers:
+            if serial_num in serial_map:
+                serial_data = serial_map[serial_num]
+                serial_obj = DeliveryItemSerial(
+                    delivery_item_id=item.id,
+                    internal_serial_number=serial_num,
+                    system_serial_number=serial_data.get('SystemSerialNumber'),
+                    quantity=serial_data.get('Quantity', 1.0),
+                    base_line_number=serial_data.get('BaseLineNumber'),
+                    allocation_status='allocated'
+                )
+                db.session.add(serial_obj)
+    
     db.session.commit()
     
     return jsonify({
@@ -258,6 +281,241 @@ def api_add_item():
         'message': 'Item added successfully',
         'item_id': item.id
     })
+
+
+@sales_delivery_bp.route('/api/get_available_serials', methods=['POST'])
+@login_required
+def api_get_available_serials():
+    """Get available serial numbers for a specific SO line from SAP"""
+    try:
+        data = request.get_json()
+        delivery_id = data.get('delivery_id')
+        base_line = data.get('base_line')
+        
+        if not delivery_id or base_line is None:
+            return jsonify({'success': False, 'error': 'Delivery ID and base line are required'})
+        
+        delivery = DeliveryDocument.query.get(delivery_id)
+        if not delivery or delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        sap = SAPIntegration()
+        so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+        
+        if not so_data:
+            return jsonify({'success': False, 'error': 'Sales Order not found'})
+        
+        # Find the line in SO
+        so_line = None
+        for line in so_data.get('DocumentLines', []):
+            if line.get('LineNum') == base_line:
+                so_line = line
+                break
+        
+        if not so_line:
+            return jsonify({'success': False, 'error': 'Line not found in Sales Order'})
+        
+        # Get serial numbers from the SO line
+        available_serials = []
+        if 'SerialNumbers' in so_line:
+            for serial in so_line['SerialNumbers']:
+                available_serials.append({
+                    'internal_serial_number': serial.get('InternalSerialNumber'),
+                    'system_serial_number': serial.get('SystemSerialNumber'),
+                    'quantity': serial.get('Quantity', 1.0),
+                    'base_line_number': serial.get('BaseLineNumber'),
+                    'item_code': serial.get('ItemCode')
+                })
+        
+        # Get already allocated serials for this line
+        allocated_serials = db.session.query(DeliveryItemSerial.internal_serial_number).join(
+            DeliveryItem, DeliveryItemSerial.delivery_item_id == DeliveryItem.id
+        ).filter(
+            DeliveryItem.delivery_id == delivery_id,
+            DeliveryItem.base_line == base_line
+        ).all()
+        
+        allocated_set = {s[0] for s in allocated_serials}
+        
+        # Filter out already allocated serials
+        unallocated_serials = [s for s in available_serials if s['internal_serial_number'] not in allocated_set]
+        
+        return jsonify({
+            'success': True,
+            'available_serials': unallocated_serials,
+            'total_available': len(unallocated_serials),
+            'already_allocated': len(allocated_set)
+        })
+        
+    except Exception as e:
+        logging.error(f"Error getting available serials: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/validate_serial_allocation', methods=['POST'])
+@login_required
+def api_validate_serial_allocation():
+    """Validate if serial numbers can be allocated to a delivery line"""
+    try:
+        data = request.get_json()
+        delivery_id = data.get('delivery_id')
+        base_line = data.get('base_line')
+        serial_numbers = data.get('serial_numbers', [])
+        quantity = data.get('quantity', 0)
+        
+        if not delivery_id or base_line is None:
+            return jsonify({'success': False, 'error': 'Delivery ID and base line are required'})
+        
+        delivery = DeliveryDocument.query.get(delivery_id)
+        if not delivery or delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        sap = SAPIntegration()
+        so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+        
+        if not so_data:
+            return jsonify({'success': False, 'error': 'Sales Order not found'})
+        
+        # Find the line in SO
+        so_line = None
+        for line in so_data.get('DocumentLines', []):
+            if line.get('LineNum') == base_line:
+                so_line = line
+                break
+        
+        if not so_line:
+            return jsonify({'success': False, 'error': 'Line not found in Sales Order'})
+        
+        # Get available serials from SO
+        available_serials_map = {}
+        if 'SerialNumbers' in so_line:
+            for serial in so_line['SerialNumbers']:
+                available_serials_map[serial.get('InternalSerialNumber')] = serial
+        
+        # Validate each serial number
+        validation_results = []
+        not_available = []
+        
+        for serial_num in serial_numbers:
+            if serial_num in available_serials_map:
+                validation_results.append({
+                    'serial_number': serial_num,
+                    'status': 'available',
+                    'allocated': True
+                })
+            else:
+                not_available.append(serial_num)
+                validation_results.append({
+                    'serial_number': serial_num,
+                    'status': 'not_available',
+                    'allocated': False
+                })
+        
+        # Check if quantity matches number of serials
+        if len(serial_numbers) != int(quantity):
+            return jsonify({
+                'success': False,
+                'error': f'Quantity ({quantity}) does not match number of serial numbers ({len(serial_numbers)})',
+                'validation_results': validation_results
+            })
+        
+        if not_available:
+            return jsonify({
+                'success': False,
+                'error': f'Serial numbers not available: {", ".join(not_available)}',
+                'validation_results': validation_results,
+                'not_available_serials': not_available
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': 'All serial numbers are available and allocated',
+            'validation_results': validation_results
+        })
+        
+    except Exception as e:
+        logging.error(f"Error validating serial allocation: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/allocate_serials', methods=['POST'])
+@login_required
+def api_allocate_serials():
+    """Allocate serial numbers to a delivery line item"""
+    try:
+        data = request.get_json()
+        delivery_item_id = data.get('delivery_item_id')
+        serial_numbers = data.get('serial_numbers', [])
+        
+        if not delivery_item_id or not serial_numbers:
+            return jsonify({'success': False, 'error': 'Delivery item ID and serial numbers are required'})
+        
+        item = DeliveryItem.query.get(delivery_item_id)
+        if not item or item.delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        # Clear existing serials for this item
+        DeliveryItemSerial.query.filter_by(delivery_item_id=delivery_item_id).delete()
+        
+        # Get SO data to fetch serial details
+        sap = SAPIntegration()
+        so_data = sap.get_sales_order_by_doc_entry(item.delivery.so_doc_entry)
+        
+        if not so_data:
+            return jsonify({'success': False, 'error': 'Sales Order not found'})
+        
+        # Find the SO line
+        so_line = None
+        for line in so_data.get('DocumentLines', []):
+            if line.get('LineNum') == item.base_line:
+                so_line = line
+                break
+        
+        if not so_line:
+            return jsonify({'success': False, 'error': 'Line not found in Sales Order'})
+        
+        # Create serial mapping from SO
+        serial_map = {}
+        if 'SerialNumbers' in so_line:
+            for serial in so_line['SerialNumbers']:
+                serial_map[serial.get('InternalSerialNumber')] = serial
+        
+        # Allocate each serial number
+        allocated_count = 0
+        for serial_num in serial_numbers:
+            if serial_num in serial_map:
+                serial_data = serial_map[serial_num]
+                serial_obj = DeliveryItemSerial(
+                    delivery_item_id=delivery_item_id,
+                    internal_serial_number=serial_num,
+                    system_serial_number=serial_data.get('SystemSerialNumber'),
+                    quantity=serial_data.get('Quantity', 1.0),
+                    base_line_number=serial_data.get('BaseLineNumber'),
+                    allocation_status='allocated'
+                )
+                db.session.add(serial_obj)
+                allocated_count += 1
+            else:
+                db.session.rollback()
+                return jsonify({
+                    'success': False,
+                    'error': f'Serial number {serial_num} not found in Sales Order'
+                })
+        
+        db.session.commit()
+        
+        logging.info(f"✅ Allocated {allocated_count} serial numbers to delivery item {delivery_item_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully allocated {allocated_count} serial numbers',
+            'allocated_count': allocated_count
+        })
+        
+    except Exception as e:
+        logging.error(f"Error allocating serials: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @sales_delivery_bp.route('/api/submit_delivery', methods=['POST'])
@@ -373,7 +631,18 @@ def api_approve_delivery():
                     'Quantity': item.quantity
                 }]
             
-            if item.serial_required and item.serial_number:
+            # Add serial numbers if allocated
+            if item.serial_numbers:
+                serial_numbers_list = []
+                for serial in item.serial_numbers:
+                    serial_numbers_list.append({
+                        'InternalSerialNumber': serial.internal_serial_number,
+                        'Quantity': serial.quantity,
+                        'SystemSerialNumber': serial.system_serial_number,
+                        'BaseLineNumber': serial.base_line_number
+                    })
+                doc_line['SerialNumbers'] = serial_numbers_list
+            elif item.serial_required and item.serial_number:
                 doc_line['SerialNumbers'] = [{
                     'InternalSerialNumber': item.serial_number,
                     'Quantity': 1.0

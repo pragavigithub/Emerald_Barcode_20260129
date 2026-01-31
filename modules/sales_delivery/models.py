@@ -69,6 +69,27 @@ class DeliveryItem(db.Model):
 
     # Relationships
     delivery = relationship('DeliveryDocument', back_populates='items')
+    serial_numbers = relationship('DeliveryItemSerial', back_populates='item', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<DeliveryItem Line={self.line_number} Item={self.item_code} Qty={self.quantity}>'
+
+
+class DeliveryItemSerial(db.Model):
+    """Serial Numbers allocated to delivery line items"""
+    __tablename__ = 'delivery_item_serials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    delivery_item_id = db.Column(db.Integer, db.ForeignKey('delivery_items.id'), nullable=False)
+    internal_serial_number = db.Column(db.String(100), nullable=False, index=True)
+    system_serial_number = db.Column(db.Integer, nullable=True)
+    quantity = db.Column(db.Float, default=1.0)
+    base_line_number = db.Column(db.Integer, nullable=False)
+    allocation_status = db.Column(db.String(20), default='allocated')  # allocated, available, not_available
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    item = relationship('DeliveryItem', back_populates='serial_numbers')
+
+    def __repr__(self):
+        return f'<DeliveryItemSerial {self.internal_serial_number} Status={self.allocation_status}>'
