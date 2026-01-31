@@ -200,7 +200,16 @@
                             </td>
                             <td>{{ line.WarehouseCode }}</td>
                             <td class="text-end">{{ "%.2f"|format(line.UnitPrice) }}</td>
-                            <td><button type="button" class="btn btn-primary" data-bs-target="#addItemModal" aria-label="Close">Add Serials</button></td>
+                            <td>
+                                {% if delivery.status == 'draft' and line.RemainingOpenQuantity > 0 %}
+                                <button type="button" class="btn btn-primary btn-sm" 
+                                        onclick="openLineSerialEntry({{ line.LineNum }}, '{{ line.ItemCode }}', '{{ line.WarehouseCode }}', {{ line.RemainingOpenQuantity }}, '{{ line.ItemDescription }}')">
+                                    <i class="fas fa-barcode"></i> Add Serials
+                                </button>
+                                {% elif line.RemainingOpenQuantity == 0 %}
+                                <span class="badge bg-secondary">Closed</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -312,13 +321,95 @@
     </div>
 </div>
 
+<!-- Line Serial Entry Modal -->
+<div class="modal fade" id="lineSerialEntryModal" tabindex="-1" aria-labelledby="lineSerialEntryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="lineSerialEntryModalLabel">
+                    <i class="fas fa-barcode"></i> Enter Serial Numbers
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Item Code:</strong> <span id="lineSerialItemCode" class="text-primary"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Warehouse:</strong> <span id="lineSerialWarehouse" class="text-primary"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Item Description:</strong> <span id="lineSerialItemDesc"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Open Quantity:</strong> <span id="lineSerialOpenQty" class="badge bg-success"></span>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Enter serial numbers below. Number of serials cannot exceed the open quantity.
+                    Serials will be validated against SAP inventory.
+                </div>
+                
+                <div class="mb-3">
+                    <label for="serialInputText" class="form-label">Enter Serial Numbers (one per line or comma-separated):</label>
+                    <textarea class="form-control" id="serialInputText" rows="6" 
+                              placeholder="Enter serial numbers here...&#10;e.g.&#10;SN001&#10;SN002&#10;or SN001, SN002, SN003"></textarea>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="showAvailableInventorySerials()">
+                            <i class="fas fa-list"></i> Show Available Serials
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-success w-100" onclick="validateEnteredSerials()">
+                            <i class="fas fa-check-circle"></i> Validate Serials
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="inventorySerialsContainer" class="d-none mb-3">
+                    <label class="form-label">Available Serials in SAP Inventory:</label>
+                    <div id="inventorySerialsList" class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                        <span class="text-muted">Loading...</span>
+                    </div>
+                    <small class="form-text text-muted">Click on a serial to add it to the input box above.</small>
+                </div>
+                
+                <div id="validationResultContainer" class="d-none">
+                    <label class="form-label">Validation Result:</label>
+                    <div id="validationResult" class="border rounded p-3"></div>
+                </div>
+                
+                <div id="lineSerialError" class="alert alert-danger d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveLineSerialsBtn" onclick="saveLineSerials()">
+                    <i class="fas fa-save"></i> Save Serials
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
-#addItemModal, #qrModal, #serialSelectionModal { z-index: 9999 !important; }
+#addItemModal, #qrModal, #serialSelectionModal, #lineSerialEntryModal { z-index: 9999 !important; }
 .modal-backdrop { z-index: 9998 !important; }
 .serial-item { padding: 8px; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
 .serial-item:hover { background-color: #f5f5f5; }
 .serial-item.selected { background-color: #d4edda; border-color: #28a745; }
 .serial-badge { display: inline-block; padding: 4px 8px; margin: 2px; background-color: #007bff; color: white; border-radius: 4px; font-size: 12px; }
+.inventory-serial-item { display: inline-block; padding: 4px 8px; margin: 3px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.inventory-serial-item:hover { background-color: #007bff; color: white; }
+.validation-valid { color: green; }
+.validation-invalid { color: red; }
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -514,7 +605,7 @@ function submitDelivery() {
     const submitBtn = event.target;
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-    fetch('{{ url_for("sales_delivery.api_submit_delivery") }}', {
+    fetch('{{ url_for("sales_delivery.api_post_delivery_to_sap") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delivery_id: deliveryId })
@@ -524,5 +615,220 @@ function submitDelivery() {
         if (data.success) { alert('Success: ' + data.message); location.reload(); } else { alert('Error: ' + data.error); submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit to SAP'; }
     })
     .catch(error => { alert('Error: ' + error); submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit to SAP'; });
+}
+
+let currentLineSerialData = { base_line: null, item_code: null, warehouse_code: null, open_quantity: 0, item_description: '' };
+
+function openLineSerialEntry(baseLine, itemCode, warehouseCode, openQty, itemDesc) {
+    currentLineSerialData = {
+        base_line: baseLine,
+        item_code: itemCode,
+        warehouse_code: warehouseCode,
+        open_quantity: openQty,
+        item_description: itemDesc
+    };
+    
+    document.getElementById('lineSerialItemCode').textContent = itemCode;
+    document.getElementById('lineSerialWarehouse').textContent = warehouseCode;
+    document.getElementById('lineSerialItemDesc').textContent = itemDesc;
+    document.getElementById('lineSerialOpenQty').textContent = openQty;
+    document.getElementById('serialInputText').value = '';
+    document.getElementById('inventorySerialsContainer').classList.add('d-none');
+    document.getElementById('validationResultContainer').classList.add('d-none');
+    document.getElementById('lineSerialError').classList.add('d-none');
+    
+    fetch('{{ url_for("sales_delivery.api_get_line_serials") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_id: deliveryId, base_line: baseLine })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.serial_numbers.length > 0) {
+            const existingSerials = data.serial_numbers.map(s => s.internal_serial_number).join('\n');
+            document.getElementById('serialInputText').value = existingSerials;
+        }
+    })
+    .catch(error => console.log('Error loading existing serials:', error));
+    
+    const modal = new bootstrap.Modal(document.getElementById('lineSerialEntryModal'));
+    modal.show();
+}
+
+function showAvailableInventorySerials() {
+    const container = document.getElementById('inventorySerialsContainer');
+    const list = document.getElementById('inventorySerialsList');
+    
+    container.classList.remove('d-none');
+    list.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Loading...</div>';
+    
+    fetch('{{ url_for("sales_delivery.api_get_inventory_serials") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            item_code: currentLineSerialData.item_code,
+            warehouse_code: currentLineSerialData.warehouse_code
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.serial_numbers && data.serial_numbers.length > 0) {
+            list.innerHTML = '';
+            data.serial_numbers.forEach(serial => {
+                const span = document.createElement('span');
+                span.className = 'inventory-serial-item';
+                span.textContent = serial.internal_serial_number;
+                span.onclick = function() { addSerialToInput(serial.internal_serial_number); };
+                list.appendChild(span);
+            });
+        } else {
+            list.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> No available serials found in SAP inventory for this item/warehouse.</span>';
+        }
+    })
+    .catch(error => {
+        list.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> Error loading serials: ' + error.message + '</span>';
+    });
+}
+
+function addSerialToInput(serialNumber) {
+    const textarea = document.getElementById('serialInputText');
+    const currentValue = textarea.value.trim();
+    if (currentValue) {
+        const lines = currentValue.split('\n').map(s => s.trim()).filter(s => s);
+        if (!lines.includes(serialNumber)) {
+            textarea.value = currentValue + '\n' + serialNumber;
+        }
+    } else {
+        textarea.value = serialNumber;
+    }
+}
+
+function parseSerialInput() {
+    const input = document.getElementById('serialInputText').value;
+    let serials = [];
+    input.split(/[\n,;]/).forEach(s => {
+        const trimmed = s.trim();
+        if (trimmed && !serials.includes(trimmed)) {
+            serials.push(trimmed);
+        }
+    });
+    return serials;
+}
+
+function validateEnteredSerials() {
+    const serials = parseSerialInput();
+    const resultContainer = document.getElementById('validationResultContainer');
+    const resultDiv = document.getElementById('validationResult');
+    const errorDiv = document.getElementById('lineSerialError');
+    
+    errorDiv.classList.add('d-none');
+    resultContainer.classList.remove('d-none');
+    resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Validating...</div>';
+    
+    if (serials.length === 0) {
+        resultDiv.innerHTML = '<span class="text-warning">No serial numbers entered.</span>';
+        return;
+    }
+    
+    if (serials.length > currentLineSerialData.open_quantity) {
+        resultDiv.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle"></i> Error: ${serials.length} serials entered but open quantity is only ${currentLineSerialData.open_quantity}.</span>`;
+        return;
+    }
+    
+    let validationPromises = serials.map(serial => {
+        return fetch('{{ url_for("sales_delivery.api_validate_serial_availability") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                serial_number: serial,
+                item_code: currentLineSerialData.item_code,
+                warehouse_code: currentLineSerialData.warehouse_code
+            })
+        })
+        .then(response => response.json())
+        .then(data => ({ serial: serial, result: data }))
+        .catch(error => ({ serial: serial, result: { success: false, error: error.message } }));
+    });
+    
+    Promise.all(validationPromises).then(results => {
+        let html = '<ul class="list-unstyled mb-0">';
+        let allValid = true;
+        
+        results.forEach(r => {
+            if (r.result.available) {
+                html += `<li class="validation-valid"><i class="fas fa-check-circle"></i> ${r.serial} - Available</li>`;
+            } else {
+                html += `<li class="validation-invalid"><i class="fas fa-times-circle"></i> ${r.serial} - ${r.result.error || 'Not available'}</li>`;
+                allValid = false;
+            }
+        });
+        
+        html += '</ul>';
+        
+        if (allValid) {
+            html = '<div class="alert alert-success mb-2"><i class="fas fa-check"></i> All ' + serials.length + ' serials validated successfully!</div>' + html;
+        } else {
+            html = '<div class="alert alert-warning mb-2"><i class="fas fa-exclamation-triangle"></i> Some serials are invalid or unavailable.</div>' + html;
+        }
+        
+        resultDiv.innerHTML = html;
+    });
+}
+
+function saveLineSerials() {
+    const serials = parseSerialInput();
+    const errorDiv = document.getElementById('lineSerialError');
+    const saveBtn = document.getElementById('saveLineSerialsBtn');
+    
+    errorDiv.classList.add('d-none');
+    
+    if (serials.length === 0) {
+        errorDiv.textContent = 'Please enter at least one serial number.';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    if (serials.length > currentLineSerialData.open_quantity) {
+        errorDiv.textContent = `Cannot save ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    
+    fetch('{{ url_for("sales_delivery.api_save_line_serials") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            delivery_id: deliveryId,
+            base_line: currentLineSerialData.base_line,
+            item_code: currentLineSerialData.item_code,
+            warehouse_code: currentLineSerialData.warehouse_code,
+            serial_numbers: serials,
+            open_quantity: currentLineSerialData.open_quantity
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Serials';
+        
+        if (data.success) {
+            alert('Serial numbers saved successfully!');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('lineSerialEntryModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            errorDiv.textContent = data.error || 'Failed to save serials.';
+            errorDiv.classList.remove('d-none');
+        }
+    })
+    .catch(error => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Serials';
+        errorDiv.textContent = 'Error saving serials: ' + error.message;
+        errorDiv.classList.remove('d-none');
+    });
 }
 </script>
