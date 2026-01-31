@@ -946,6 +946,137 @@ class SAPIntegration:
                 'error': f'Exception: {str(e)}'
             }
 
+    def validate_serial_in_inventory(self, serial_number, item_code, warehouse_code):
+        """
+        Validate if a serial number is available in SAP inventory for the given item and warehouse.
+        Uses SerialNumberDetails API to check availability.
+        """
+        if not self.ensure_logged_in():
+            logging.warning("SAP B1 not available for serial validation")
+            return {
+                'success': False,
+                'available': False,
+                'error': 'SAP B1 connection unavailable'
+            }
+        
+        try:
+            filter_query = f"DistNumber eq '{serial_number}' and ItemCode eq '{item_code}' and WhsCode eq '{warehouse_code}'"
+            url = f"{self.base_url}/b1s/v1/SerialNumberDetails?$filter={filter_query}"
+            
+            logging.info(f"🔍 Validating serial {serial_number} for item {item_code} in warehouse {warehouse_code}")
+            response = self.session.get(url, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                serial_list = data.get('value', [])
+                
+                if serial_list:
+                    serial_data = serial_list[0]
+                    status = serial_data.get('Status', '')
+                    system_number = serial_data.get('SystemNumber', 0)
+                    
+                    if status == 0 or status == '0':
+                        logging.info(f"✅ Serial {serial_number} is available in inventory")
+                        return {
+                            'success': True,
+                            'available': True,
+                            'serial_number': serial_number,
+                            'item_code': item_code,
+                            'warehouse_code': warehouse_code,
+                            'system_serial_number': system_number,
+                            'status': 'available'
+                        }
+                    else:
+                        logging.warning(f"⚠️ Serial {serial_number} exists but status is not available (Status: {status})")
+                        return {
+                            'success': True,
+                            'available': False,
+                            'serial_number': serial_number,
+                            'error': f'Serial number {serial_number} is not available (already allocated or used)',
+                            'status': 'not_available'
+                        }
+                else:
+                    logging.warning(f"❌ Serial {serial_number} not found in inventory for {item_code}")
+                    return {
+                        'success': True,
+                        'available': False,
+                        'serial_number': serial_number,
+                        'error': f'Serial number {serial_number} not found in inventory for item {item_code} in warehouse {warehouse_code}',
+                        'status': 'not_found'
+                    }
+            else:
+                logging.error(f"❌ SAP API error: {response.status_code} - {response.text}")
+                return {
+                    'success': False,
+                    'available': False,
+                    'error': f'SAP API error: {response.status_code}'
+                }
+                
+        except Exception as e:
+            logging.error(f"❌ Error validating serial in inventory: {str(e)}")
+            return {
+                'success': False,
+                'available': False,
+                'error': str(e)
+            }
+
+    def get_available_serials_from_inventory(self, item_code, warehouse_code):
+        """
+        Get list of available serial numbers for an item in a specific warehouse.
+        Uses SerialNumberDetails API with Status=0 filter for available serials.
+        """
+        if not self.ensure_logged_in():
+            logging.warning("SAP B1 not available")
+            return {
+                'success': False,
+                'error': 'SAP B1 connection unavailable',
+                'serial_numbers': []
+            }
+        
+        try:
+            filter_query = f"ItemCode eq '{item_code}' and WhsCode eq '{warehouse_code}' and Status eq 0"
+            url = f"{self.base_url}/b1s/v1/SerialNumberDetails?$filter={filter_query}&$select=DistNumber,SystemNumber,ItemCode,WhsCode,Status"
+            
+            headers = {"Prefer": "odata.maxpagesize=500"}
+            logging.info(f"🔍 Fetching available serials for {item_code} in {warehouse_code}")
+            response = self.session.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                serial_list = data.get('value', [])
+                
+                available_serials = []
+                for serial in serial_list:
+                    available_serials.append({
+                        'internal_serial_number': serial.get('DistNumber', ''),
+                        'system_serial_number': serial.get('SystemNumber', 0),
+                        'item_code': serial.get('ItemCode', ''),
+                        'warehouse_code': serial.get('WhsCode', ''),
+                        'quantity': 1
+                    })
+                
+                logging.info(f"✅ Found {len(available_serials)} available serials for {item_code}")
+                return {
+                    'success': True,
+                    'serial_numbers': available_serials,
+                    'count': len(available_serials)
+                }
+            else:
+                logging.error(f"❌ SAP API error: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'SAP API error: {response.status_code}',
+                    'serial_numbers': []
+                }
+                
+        except Exception as e:
+            logging.error(f"❌ Error fetching available serials: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'serial_numbers': []
+            }
+
     def get_invt_series(self):
         """Get Inventory Transfer series from SAP B1 using SQLQueries"""
         if not self.ensure_logged_in():

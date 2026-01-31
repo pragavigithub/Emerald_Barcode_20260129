@@ -1,0 +1,70 @@
+{
+    "CardCode": "3D SEALS",
+    "DocDate": "2025-10-24",
+    //"DocCurrency": "INR",
+    //"Series": "243",
+    "Comments": "Delivery against SO None",
+    "BPL_IDAssignedToInvoice": 5,
+    "DocumentLines": [
+        {
+            "LineNum": 0,
+            "BaseType": 17,
+            "BaseEntry": 1266,
+            "BaseLine": 0,
+            "ItemCode": "Production_Item",
+            "Quantity": 3.0,
+            "WarehouseCode": "ORD-CHN",
+            "UnitPrice": 233.0,
+            "SerialNumbers": [
+                {
+                    "InternalSerialNumber": "PR12342000",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 1,
+                    "BaseLineNumber": 0
+                },
+                {
+                    "InternalSerialNumber": "PR12340001",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 2,
+                    "BaseLineNumber": 0
+                },
+                {
+                    "InternalSerialNumber": "PR12340002",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 3,
+                    "BaseLineNumber": 0
+                }
+            ]
+        },
+        {
+            "LineNum": 1,
+            "BaseType": 17,
+            "BaseEntry": 1266,
+            "BaseLine": 1,
+            "ItemCode": "Production_Item_2",
+            "Quantity": 3.0,
+            "WarehouseCode": "ORD-CHN",
+            "UnitPrice": 233.0,
+            "SerialNumbers": [
+                {
+                    "InternalSerialNumber": "PRO003",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 3,
+                    "BaseLineNumber": 1
+                },
+                {
+                    "InternalSerialNumber": "PRO004",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 4,
+                    "BaseLineNumber": 1
+                },
+                {
+                    "InternalSerialNumber": "PRO005",
+                    "Quantity": 1,
+                    "SystemSerialNumber": 5,
+                    "BaseLineNumber": 1
+                }
+            ]
+        }
+    ]
+}

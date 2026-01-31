@@ -745,3 +745,350 @@ def api_delete_item(item_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'Item deleted successfully'})
+
+
+@sales_delivery_bp.route('/api/validate_serial_availability', methods=['POST'])
+@login_required
+def api_validate_serial_availability():
+    """Validate if a serial number is available in SAP inventory"""
+    try:
+        data = request.get_json()
+        serial_number = data.get('serial_number', '').strip()
+        item_code = data.get('item_code', '').strip()
+        warehouse_code = data.get('warehouse_code', '').strip()
+        
+        if not serial_number or not item_code or not warehouse_code:
+            return jsonify({
+                'success': False,
+                'error': 'Serial number, item code, and warehouse code are required'
+            })
+        
+        sap = SAPIntegration()
+        result = sap.validate_serial_in_inventory(serial_number, item_code, warehouse_code)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Error validating serial availability: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/get_inventory_serials', methods=['POST'])
+@login_required
+def api_get_inventory_serials():
+    """Get available serial numbers from SAP inventory for an item/warehouse"""
+    try:
+        data = request.get_json()
+        item_code = data.get('item_code', '').strip()
+        warehouse_code = data.get('warehouse_code', '').strip()
+        
+        if not item_code or not warehouse_code:
+            return jsonify({
+                'success': False,
+                'error': 'Item code and warehouse code are required'
+            })
+        
+        sap = SAPIntegration()
+        result = sap.get_available_serials_from_inventory(item_code, warehouse_code)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Error getting inventory serials: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/save_line_serials', methods=['POST'])
+@login_required
+def api_save_line_serials():
+    """
+    Validate and save serial numbers for a specific SO line.
+    Validates: serial count <= open qty, serial availability in SAP inventory.
+    Stores validated serials to DeliveryItemSerial table.
+    """
+    try:
+        data = request.get_json()
+        delivery_id = data.get('delivery_id')
+        base_line = data.get('base_line')
+        item_code = data.get('item_code', '').strip()
+        warehouse_code = data.get('warehouse_code', '').strip()
+        serial_numbers = data.get('serial_numbers', [])
+        open_quantity = data.get('open_quantity', 0)
+        
+        if not delivery_id or base_line is None or not item_code:
+            return jsonify({'success': False, 'error': 'Missing required fields'})
+        
+        delivery = DeliveryDocument.query.get(delivery_id)
+        if not delivery or delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        if delivery.status != 'draft':
+            return jsonify({'success': False, 'error': 'Cannot modify submitted delivery'})
+        
+        if len(serial_numbers) > open_quantity:
+            return jsonify({
+                'success': False,
+                'error': f'Number of serial numbers ({len(serial_numbers)}) exceeds open quantity ({open_quantity})'
+            })
+        
+        if not serial_numbers:
+            return jsonify({'success': False, 'error': 'At least one serial number is required'})
+        
+        sap = SAPIntegration()
+        validated_serials = []
+        invalid_serials = []
+        
+        for serial_num in serial_numbers:
+            serial_num = serial_num.strip()
+            if not serial_num:
+                continue
+                
+            validation = sap.validate_serial_in_inventory(serial_num, item_code, warehouse_code)
+            
+            if validation.get('available'):
+                validated_serials.append({
+                    'internal_serial_number': serial_num,
+                    'system_serial_number': validation.get('system_serial_number', 0),
+                    'quantity': 1
+                })
+            else:
+                invalid_serials.append({
+                    'serial_number': serial_num,
+                    'reason': validation.get('error', 'Not available')
+                })
+        
+        if invalid_serials:
+            invalid_list = [s['serial_number'] for s in invalid_serials]
+            return jsonify({
+                'success': False,
+                'error': f'Invalid or unavailable serial numbers: {", ".join(invalid_list)}',
+                'invalid_serials': invalid_serials,
+                'validated_count': len(validated_serials)
+            })
+        
+        existing_item = DeliveryItem.query.filter_by(
+            delivery_id=delivery_id,
+            base_line=base_line
+        ).first()
+        
+        if existing_item:
+            DeliveryItemSerial.query.filter_by(delivery_item_id=existing_item.id).delete()
+            existing_item.quantity = len(validated_serials)
+        else:
+            so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+            so_line = None
+            if so_data:
+                for line in so_data.get('DocumentLines', []):
+                    if line.get('LineNum') == base_line:
+                        so_line = line
+                        break
+            
+            next_line_num = db.session.query(db.func.max(DeliveryItem.line_number)).filter_by(
+                delivery_id=delivery_id
+            ).scalar() or 0
+            
+            existing_item = DeliveryItem(
+                delivery_id=delivery_id,
+                line_number=next_line_num + 1,
+                base_line=base_line,
+                item_code=item_code,
+                item_description=so_line.get('ItemDescription') if so_line else '',
+                warehouse_code=warehouse_code,
+                quantity=len(validated_serials),
+                open_quantity=open_quantity,
+                unit_price=so_line.get('UnitPrice', 0) if so_line else 0,
+                uom_code=so_line.get('UoMCode') if so_line else None,
+                serial_required=True
+            )
+            db.session.add(existing_item)
+            db.session.flush()
+        
+        system_serial_counter = 1
+        for serial_data in validated_serials:
+            serial_obj = DeliveryItemSerial(
+                delivery_item_id=existing_item.id,
+                internal_serial_number=serial_data['internal_serial_number'],
+                system_serial_number=serial_data.get('system_serial_number') or system_serial_counter,
+                quantity=1.0,
+                base_line_number=base_line,
+                allocation_status='allocated'
+            )
+            db.session.add(serial_obj)
+            system_serial_counter += 1
+        
+        db.session.commit()
+        
+        logging.info(f"✅ Saved {len(validated_serials)} serial numbers for delivery {delivery_id}, line {base_line}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully validated and saved {len(validated_serials)} serial numbers',
+            'validated_count': len(validated_serials),
+            'item_id': existing_item.id
+        })
+        
+    except Exception as e:
+        logging.error(f"Error saving line serials: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/post_delivery_to_sap', methods=['POST'])
+@login_required
+def api_post_delivery_to_sap():
+    """
+    Post delivery note to SAP B1 with serial numbers.
+    Creates the delivery note in SAP with the format expected by SAP Service Layer.
+    """
+    try:
+        data = request.get_json()
+        delivery_id = data.get('delivery_id')
+        
+        if not delivery_id:
+            return jsonify({'success': False, 'error': 'Delivery ID is required'})
+        
+        delivery = DeliveryDocument.query.get(delivery_id)
+        
+        if not delivery or delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        if delivery.status not in ['draft', 'submitted']:
+            return jsonify({'success': False, 'error': 'Delivery already posted or not ready'})
+        
+        items = DeliveryItem.query.filter_by(delivery_id=delivery_id).all()
+        
+        if not items:
+            return jsonify({'success': False, 'error': 'No items to deliver'})
+        
+        sap = SAPIntegration()
+        
+        if not sap.ensure_logged_in():
+            return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
+        
+        so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+        if not so_data:
+            return jsonify({'success': False, 'error': 'Sales Order not found in SAP'})
+        
+        document_lines = []
+        for item in items:
+            doc_line = {
+                'LineNum': item.base_line,
+                'BaseType': 17,
+                'BaseEntry': delivery.so_doc_entry,
+                'BaseLine': item.base_line,
+                'ItemCode': item.item_code,
+                'Quantity': item.quantity,
+                'WarehouseCode': item.warehouse_code,
+                'UnitPrice': item.unit_price or 0
+            }
+            
+            if item.serial_numbers:
+                serial_numbers_list = []
+                for idx, serial in enumerate(item.serial_numbers):
+                    serial_numbers_list.append({
+                        'InternalSerialNumber': serial.internal_serial_number,
+                        'Quantity': 1,
+                        'SystemSerialNumber': serial.system_serial_number or (idx + 1),
+                        'BaseLineNumber': item.base_line
+                    })
+                doc_line['SerialNumbers'] = serial_numbers_list
+            
+            if item.batch_required and item.batch_number:
+                doc_line['BatchNumbers'] = [{
+                    'BatchNumber': item.batch_number,
+                    'Quantity': item.quantity
+                }]
+            
+            document_lines.append(doc_line)
+        
+        delivery_payload = {
+            'CardCode': delivery.card_code or so_data.get('CardCode'),
+            'DocDate': datetime.now().strftime('%Y-%m-%d'),
+            'Comments': f'Delivery against SO {delivery.so_doc_num}',
+            'BPL_IDAssignedToInvoice': so_data.get('BPL_IDAssignedToInvoice', 1),
+            'DocumentLines': document_lines
+        }
+        
+        logging.info(f"📤 Posting delivery to SAP: {delivery_payload}")
+        
+        result = sap.create_delivery_note(delivery_payload)
+        
+        if result.get('success'):
+            delivery.sap_doc_entry = result.get('doc_entry')
+            delivery.sap_doc_num = result.get('doc_num')
+            delivery.status = 'posted'
+            delivery.submitted_at = datetime.utcnow()
+            db.session.commit()
+            
+            logging.info(f"✅ Delivery {delivery_id} posted to SAP as DocNum: {result.get('doc_num')}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Delivery Note {result.get("doc_num")} created successfully in SAP',
+                'sap_doc_entry': result.get('doc_entry'),
+                'sap_doc_num': result.get('doc_num')
+            })
+        else:
+            error_msg = result.get('error', 'Unknown SAP error')
+            logging.error(f"❌ SAP posting failed: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': f'SAP B1 Error: {error_msg}'
+            })
+        
+    except Exception as e:
+        logging.error(f"Error posting delivery to SAP: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@sales_delivery_bp.route('/api/get_line_serials', methods=['POST'])
+@login_required
+def api_get_line_serials():
+    """Get allocated serial numbers for a specific line item"""
+    try:
+        data = request.get_json()
+        delivery_id = data.get('delivery_id')
+        base_line = data.get('base_line')
+        
+        if not delivery_id or base_line is None:
+            return jsonify({'success': False, 'error': 'Delivery ID and base line are required'})
+        
+        delivery = DeliveryDocument.query.get(delivery_id)
+        if not delivery or delivery.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Access denied'})
+        
+        item = DeliveryItem.query.filter_by(
+            delivery_id=delivery_id,
+            base_line=base_line
+        ).first()
+        
+        if not item:
+            return jsonify({
+                'success': True,
+                'serial_numbers': [],
+                'count': 0
+            })
+        
+        serials = DeliveryItemSerial.query.filter_by(delivery_item_id=item.id).all()
+        
+        serial_list = []
+        for serial in serials:
+            serial_list.append({
+                'id': serial.id,
+                'internal_serial_number': serial.internal_serial_number,
+                'system_serial_number': serial.system_serial_number,
+                'quantity': serial.quantity,
+                'allocation_status': serial.allocation_status
+            })
+        
+        return jsonify({
+            'success': True,
+            'serial_numbers': serial_list,
+            'count': len(serial_list),
+            'item_id': item.id
+        })
+        
+    except Exception as e:
+        logging.error(f"Error getting line serials: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
