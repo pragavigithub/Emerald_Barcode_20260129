@@ -721,9 +721,16 @@ function validateEnteredSerials() {
     const resultDiv = document.getElementById('validationResult');
     const errorDiv = document.getElementById('lineSerialError');
     
-    if (!resultContainer || !resultDiv) {
-        console.error('Validation elements not found in DOM');
-        alert('Error: Validation elements not found. Please try again.');
+    // Improved error handling
+    if (!resultContainer) {
+        console.error('Validation result container not found in DOM');
+        alert('Error: UI elements not properly initialized. Please close and reopen the modal.');
+        return;
+    }
+    
+    if (!resultDiv) {
+        console.error('Validation result div not found in DOM');
+        alert('Error: Validation display element missing. Please try again.');
         return;
     }
     
@@ -732,7 +739,7 @@ function validateEnteredSerials() {
     resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Validating...</div>';
     
     if (serials.length === 0) {
-        resultDiv.innerHTML = '<span class="text-warning">No serial numbers entered.</span>';
+        resultDiv.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-circle"></i> No serial numbers entered.</span>';
         return;
     }
     
@@ -754,9 +761,12 @@ function validateEnteredSerials() {
                 doc_entry: soDocEntry
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(data => ({ serial: serial, result: data }))
-        .catch(error => ({ serial: serial, result: { success: false, error: error.message } }));
+        .catch(error => ({ serial: serial, result: { success: false, available: false, error: error.message } }));
     });
     
     Promise.all(validationPromises).then(results => {
@@ -781,6 +791,9 @@ function validateEnteredSerials() {
         }
         
         resultDiv.innerHTML = html;
+    }).catch(error => {
+        console.error('Validation error:', error);
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Error during validation: ' + error.message + '</div>';
     });
 }
 
@@ -864,29 +877,23 @@ function validateAndAddSerials() {
     const resultDiv = document.getElementById('validationResult');
     const resultContainer = document.getElementById('validationResultContainer');
     
+    // Clear previous errors
     if (errorDiv) errorDiv.classList.add('d-none');
     
+    // Validation checks
     if (serials.length === 0) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Please enter at least one serial number.';
-            errorDiv.classList.remove('d-none');
-        } else {
-            alert('Please enter at least one serial number.');
-        }
+        showLineSerialError('Please enter at least one serial number.');
         return;
     }
     
     if (serials.length > currentLineSerialData.open_quantity) {
-        if (errorDiv) {
-            errorDiv.textContent = `Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
-            errorDiv.classList.remove('d-none');
-        } else {
-            alert(`Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`);
-        }
+        showLineSerialError(`Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`);
         return;
     }
     
+    // Disable button and show loading state
     saveBtn.disabled = true;
+    const originalText = saveBtn.innerHTML;
     saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating & Adding...';
     
     // Get SO DocEntry from the page
@@ -903,58 +910,94 @@ function validateAndAddSerials() {
             serial_numbers: serials
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-check"></i> Validate & Add to Picked Items';
+        saveBtn.innerHTML = originalText;
         
         if (data.success) {
-            // Show success message with validation results
-            let resultHtml = '<div class="alert alert-success mb-3"><i class="fas fa-check-circle"></i> ' + data.message + '</div>';
-            resultHtml += '<div class="alert alert-info"><strong>Added to Picked Items:</strong><br>';
-            resultHtml += 'Item: ' + data.picked_item.item_code + '<br>';
-            resultHtml += 'Quantity: ' + data.picked_item.quantity + '<br>';
-            resultHtml += 'Warehouse: ' + data.picked_item.warehouse_code + '<br>';
-            resultHtml += 'Serials: ' + data.picked_item.serial_numbers.join(', ') + '</div>';
-            
-            const resultDiv = document.getElementById('validationResult');
-            resultDiv.innerHTML = resultHtml;
-            document.getElementById('validationResultContainer').classList.remove('d-none');
-            
-            // Auto-close modal after 2 seconds and reload
+            showLineSerialSuccess(data, serials);
+            // Close modal after 2 seconds and reload
             setTimeout(() => {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('lineSerialEntryModal'));
-                modal.hide();
+                if (modal) modal.hide();
                 location.reload();
             }, 2000);
         } else {
-            // Show validation errors
-            let errorHtml = '<div class="alert alert-danger mb-3"><i class="fas fa-times-circle"></i> ' + data.error + '</div>';
-            
-            if (data.validation_results && data.validation_results.length > 0) {
-                errorHtml += '<div class="alert alert-warning"><strong>Validation Details:</strong><ul class="mb-0">';
-                data.validation_results.forEach(result => {
-                    const icon = result.status === 'valid' ? '<i class="fas fa-check-circle text-success"></i>' : '<i class="fas fa-times-circle text-danger"></i>';
-                    errorHtml += '<li>' + icon + ' ' + result.serial_number + ' - ' + result.message + '</li>';
-                });
-                errorHtml += '</ul></div>';
-            }
-            
-            const resultDiv = document.getElementById('validationResult');
-            resultDiv.innerHTML = errorHtml;
-            document.getElementById('validationResultContainer').classList.remove('d-none');
+            showLineSerialValidationErrors(data);
         }
     })
     .catch(error => {
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-check"></i> Validate & Add to Picked Items';
-        if (errorDiv) {
-            errorDiv.textContent = 'Error validating serials: ' + error.message;
-            errorDiv.classList.remove('d-none');
-        } else {
-            alert('Error validating serials: ' + error.message);
-        }
+        saveBtn.innerHTML = originalText;
+        console.error('Error validating serials:', error);
+        showLineSerialError('Error validating serials: ' + error.message);
     });
+}
+
+function showLineSerialError(message) {
+    const errorDiv = document.getElementById('lineSerialError');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('d-none');
+    } else {
+        alert(message);
+    }
+}
+
+function showLineSerialSuccess(data, serials) {
+    const resultDiv = document.getElementById('validationResult');
+    const resultContainer = document.getElementById('validationResultContainer');
+    
+    if (!resultDiv || !resultContainer) {
+        console.warn('Result elements not found, showing alert instead');
+        alert('Successfully added ' + serials.length + ' serial(s) to picked items!');
+        return;
+    }
+    
+    let resultHtml = '<div class="alert alert-success mb-3"><i class="fas fa-check-circle"></i> ' + data.message + '</div>';
+    
+    if (data.picked_item) {
+        resultHtml += '<div class="alert alert-info"><strong>Added to Picked Items:</strong><br>';
+        resultHtml += 'Item: ' + data.picked_item.item_code + '<br>';
+        resultHtml += 'Quantity: ' + data.picked_item.quantity + '<br>';
+        resultHtml += 'Warehouse: ' + data.picked_item.warehouse_code + '<br>';
+        resultHtml += 'Serials: ' + data.picked_item.serial_numbers.join(', ') + '</div>';
+    }
+    
+    resultDiv.innerHTML = resultHtml;
+    resultContainer.classList.remove('d-none');
+}
+
+function showLineSerialValidationErrors(data) {
+    const resultDiv = document.getElementById('validationResult');
+    const resultContainer = document.getElementById('validationResultContainer');
+    
+    if (!resultDiv || !resultContainer) {
+        showLineSerialError(data.error || 'Validation failed');
+        return;
+    }
+    
+    let errorHtml = '<div class="alert alert-danger mb-3"><i class="fas fa-times-circle"></i> ' + (data.error || 'Validation failed') + '</div>';
+    
+    if (data.validation_results && data.validation_results.length > 0) {
+        errorHtml += '<div class="alert alert-warning"><strong>Validation Details:</strong><ul class="mb-0">';
+        data.validation_results.forEach(result => {
+            const icon = result.status === 'valid' 
+                ? '<i class="fas fa-check-circle text-success"></i>' 
+                : '<i class="fas fa-times-circle text-danger"></i>';
+            errorHtml += '<li>' + icon + ' ' + result.serial_number + ' - ' + result.message + '</li>';
+        });
+        errorHtml += '</ul></div>';
+    }
+    
+    resultDiv.innerHTML = errorHtml;
+    resultContainer.classList.remove('d-none');
 }
 </script>
 {% endblock %}
