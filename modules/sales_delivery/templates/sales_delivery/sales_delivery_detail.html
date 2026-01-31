@@ -200,7 +200,7 @@
                             </td>
                             <td>{{ line.WarehouseCode }}</td>
                             <td class="text-end">{{ "%.2f"|format(line.UnitPrice) }}</td>
-                            <td><button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close">Add Serials</button></td>
+                            <td><button type="button" class="btn btn-primary" data-bs-target="#addItemModal" aria-label="Close">Add Serials</button></td>
                         </tr>
                         {% endfor %}
                     </tbody>
