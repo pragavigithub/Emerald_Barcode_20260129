@@ -185,6 +185,7 @@
                             <th width="10%">Open Qty</th>
                             <th width="10%">Warehouse</th>
                             <th width="10%">Unit Price</th>
+                            <th width="10%">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -199,6 +200,7 @@
                             </td>
                             <td>{{ line.WarehouseCode }}</td>
                             <td class="text-end">{{ "%.2f"|format(line.UnitPrice) }}</td>
+                            <td><button type="button" class="btn btn-primary" data-bs-dismiss="modal" aria-label="Close">Add Serials</button></td>
                         </tr>
                         {% endfor %}
                     </tbody>
