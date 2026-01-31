@@ -8,6 +8,7 @@
         <div>
             <h1 class="h3 mb-0 text-gray-800">Delivery Note</h1>
             <p class="text-muted mb-0">Sales Order: <strong>{{ delivery.so_doc_num or 'None' }}</strong></p>
+            <p class="text-muted mb-0">Sales Order: <strong>{{ delivery.so_doc_entry or 'None' }}</strong></p>
         </div>
         <div>
             <a href="{{ url_for('sales_delivery.index') }}" class="btn btn-secondary">
@@ -351,7 +352,7 @@
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i> 
                     Enter serial numbers below. Number of serials cannot exceed the open quantity.
-                    Serials will be validated against SAP inventory.
+                    Serials will be validated against SAP Sales Order.
                 </div>
                 
                 <div class="mb-3">
@@ -390,8 +391,8 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveLineSerialsBtn" onclick="saveLineSerials()">
-                    <i class="fas fa-save"></i> Save Serials
+                <button type="button" class="btn btn-primary" id="saveLineSerialsBtn" onclick="validateAndAddSerials()">
+                    <i class="fas fa-check"></i> Validate & Add to Picked Items
                 </button>
             </div>
         </div>
@@ -741,7 +742,8 @@ function validateEnteredSerials() {
             body: JSON.stringify({
                 serial_number: serial,
                 item_code: currentLineSerialData.item_code,
-                warehouse_code: currentLineSerialData.warehouse_code
+                warehouse_code: currentLineSerialData.warehouse_code,
+                doc_entry:delivery.so_doc_entry
             })
         })
         .then(response => response.json())
@@ -827,6 +829,92 @@ function saveLineSerials() {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Serials';
         errorDiv.textContent = 'Error saving serials: ' + error.message;
+        errorDiv.classList.remove('d-none');
+    });
+}
+
+function validateAndAddSerials() {
+    const serials = parseSerialInput();
+    const errorDiv = document.getElementById('lineSerialError');
+    const saveBtn = document.getElementById('saveLineSerialsBtn');
+    
+    errorDiv.classList.add('d-none');
+    
+    if (serials.length === 0) {
+        errorDiv.textContent = 'Please enter at least one serial number.';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    if (serials.length > currentLineSerialData.open_quantity) {
+        errorDiv.textContent = `Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating & Adding...';
+    
+    // Get SO DocEntry from the page
+    const soDocEntry = {{ delivery.so_doc_entry }};
+    
+    fetch('{{ url_for("sales_delivery.api_validate_serials_against_so") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            delivery_id: deliveryId,
+            doc_entry: soDocEntry,
+            item_code: currentLineSerialData.item_code,
+            warehouse_code: currentLineSerialData.warehouse_code,
+            serial_numbers: serials
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Validate & Add to Picked Items';
+        
+        if (data.success) {
+            // Show success message with validation results
+            let resultHtml = '<div class="alert alert-success mb-3"><i class="fas fa-check-circle"></i> ' + data.message + '</div>';
+            resultHtml += '<div class="alert alert-info"><strong>Added to Picked Items:</strong><br>';
+            resultHtml += 'Item: ' + data.picked_item.item_code + '<br>';
+            resultHtml += 'Quantity: ' + data.picked_item.quantity + '<br>';
+            resultHtml += 'Warehouse: ' + data.picked_item.warehouse_code + '<br>';
+            resultHtml += 'Serials: ' + data.picked_item.serial_numbers.join(', ') + '</div>';
+            
+            const resultDiv = document.getElementById('validationResult');
+            resultDiv.innerHTML = resultHtml;
+            document.getElementById('validationResultContainer').classList.remove('d-none');
+            
+            // Auto-close modal after 2 seconds and reload
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('lineSerialEntryModal'));
+                modal.hide();
+                location.reload();
+            }, 2000);
+        } else {
+            // Show validation errors
+            let errorHtml = '<div class="alert alert-danger mb-3"><i class="fas fa-times-circle"></i> ' + data.error + '</div>';
+            
+            if (data.validation_results && data.validation_results.length > 0) {
+                errorHtml += '<div class="alert alert-warning"><strong>Validation Details:</strong><ul class="mb-0">';
+                data.validation_results.forEach(result => {
+                    const icon = result.status === 'valid' ? '<i class="fas fa-check-circle text-success"></i>' : '<i class="fas fa-times-circle text-danger"></i>';
+                    errorHtml += '<li>' + icon + ' ' + result.serial_number + ' - ' + result.message + '</li>';
+                });
+                errorHtml += '</ul></div>';
+            }
+            
+            const resultDiv = document.getElementById('validationResult');
+            resultDiv.innerHTML = errorHtml;
+            document.getElementById('validationResultContainer').classList.remove('d-none');
+        }
+    })
+    .catch(error => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Validate & Add to Picked Items';
+        errorDiv.textContent = 'Error validating serials: ' + error.message;
         errorDiv.classList.remove('d-none');
     });
 }

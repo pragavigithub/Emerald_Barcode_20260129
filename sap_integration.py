@@ -946,7 +946,7 @@ class SAPIntegration:
                 'error': f'Exception: {str(e)}'
             }
 
-    def validate_serial_in_inventory(self, serial_number, item_code, warehouse_code):
+    def validate_serial_in_inventory(self, serial_number, item_code, warehouse_code,doc_entry):
         """
         Validate if a serial number is available in SAP inventory for the given item and warehouse.
         Uses SerialNumberDetails API to check availability.
@@ -961,7 +961,7 @@ class SAPIntegration:
         
         try:
             filter_query = f"DistNumber eq '{serial_number}' and ItemCode eq '{item_code}' and WhsCode eq '{warehouse_code}'"
-            url = f"{self.base_url}/b1s/v1/SerialNumberDetails?$filter={filter_query}"
+            url = f"{self.base_url}/b1s/v1/Orders?$filter={doc_entry}"
             
             logging.info(f"🔍 Validating serial {serial_number} for item {item_code} in warehouse {warehouse_code}")
             response = self.session.get(url, timeout=30)
