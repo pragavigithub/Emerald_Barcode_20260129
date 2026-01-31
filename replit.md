@@ -43,6 +43,23 @@ The system is built on a Flask web application backend, utilizing Jinja2 for ser
 *   **SO Against Invoice Module:** Allows creating invoices against existing Sales Orders with SAP B1 integration, including SO series selection, SO number validation, and item validation.
 *   **Item Tracking Module:** Serial number tracking module that fetches transaction history from SAP B1 using the 'item_tracking' SQL Query. Supports manual entry and QR code scanning, displays document type names (GRPO, Delivery, Invoice, Transfer, etc.) with complete SAP B1 DocType mapping.
 
+## Recent Changes (January 31, 2026)
+*   **Sales Delivery Serial Number Enhancement - Line-Item Wise Serial Entry:**
+    - Added new "Add Serials" button for each SO line in the delivery detail page
+    - New modal for entering serial numbers per line item with validation against SAP inventory
+    - Serial numbers validated using SAP B1 SerialNumberDetails API to check availability
+    - Serial count validation ensures serials cannot exceed open quantity per line
+    - New API endpoints added to `modules/sales_delivery/routes.py`:
+      - `POST /api/validate_serial_availability` - Validates serial against SAP inventory
+      - `POST /api/get_inventory_serials` - Fetches available serials from SAP inventory
+      - `POST /api/save_line_serials` - Validates and stores serials to DeliveryItemSerial table
+      - `POST /api/post_delivery_to_sap` - Posts delivery note to SAP B1 with serial numbers
+      - `POST /api/get_line_serials` - Retrieves allocated serials for a line item
+    - SAP integration methods added to `sap_integration.py`:
+      - `validate_serial_in_inventory()` - Checks serial availability in SAP inventory
+      - `get_available_serials_from_inventory()` - Lists available serials for item/warehouse
+    - Delivery Note posting includes proper SAP B1 format with InternalSerialNumber, SystemSerialNumber, Quantity, and BaseLineNumber
+
 ## Recent Changes (January 28, 2026)
 *   **GRPO Transfer Module - Separate Warehouse Destinations for Approved/Rejected Quantities:**
     - Updated Edit Item modal to support separate warehouse/bin destinations for approved and rejected quantities
