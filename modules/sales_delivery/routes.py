@@ -750,28 +750,65 @@ def api_delete_item(item_id):
 @sales_delivery_bp.route('/api/validate_serial_availability', methods=['POST'])
 @login_required
 def api_validate_serial_availability():
-    """Validate if a serial number is available in SAP inventory"""
+    """Validate if a serial number is available in the Sales Order DocumentLines"""
     try:
         data = request.get_json()
         serial_number = data.get('serial_number', '').strip()
         item_code = data.get('item_code', '').strip()
         warehouse_code = data.get('warehouse_code', '').strip()
-        doc_entry=data.get('doc_entry').strip()
+        doc_entry = data.get('doc_entry')
         
         if not serial_number or not item_code or not warehouse_code:
             return jsonify({
                 'success': False,
+                'available': False,
                 'error': 'Serial number, item code, and warehouse code are required'
             })
         
-        sap = SAPIntegration()
-        result = sap.validate_serial_in_inventory(serial_number, item_code, warehouse_code,doc_entry)
+        if not doc_entry:
+            return jsonify({
+                'success': False,
+                'available': False,
+                'error': 'DocEntry is required for validation'
+            })
         
-        return jsonify(result)
+        sap = SAPIntegration()
+        so_data = sap.get_sales_order_by_doc_entry(doc_entry)
+        
+        if not so_data:
+            return jsonify({
+                'success': False,
+                'available': False,
+                'error': f'Sales Order with DocEntry {doc_entry} not found in SAP'
+            })
+        
+        for line in so_data.get('DocumentLines', []):
+            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code:
+                serial_numbers_in_line = line.get('SerialNumbers', [])
+                for sn in serial_numbers_in_line:
+                    if sn.get('InternalSerialNumber') == serial_number:
+                        return jsonify({
+                            'success': True,
+                            'available': True,
+                            'serial_number': serial_number,
+                            'item_code': item_code,
+                            'warehouse_code': warehouse_code,
+                            'system_serial_number': sn.get('SystemSerialNumber'),
+                            'base_line_number': sn.get('BaseLineNumber'),
+                            'quantity': sn.get('Quantity', 1.0),
+                            'message': f'Serial {serial_number} found in Sales Order for {item_code}'
+                        })
+        
+        return jsonify({
+            'success': True,
+            'available': False,
+            'serial_number': serial_number,
+            'error': f'Serial {serial_number} not found in Sales Order for item {item_code} in warehouse {warehouse_code}'
+        })
         
     except Exception as e:
         logging.error(f"Error validating serial availability: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'available': False, 'error': str(e)}), 500
 
 
 @sales_delivery_bp.route('/api/get_inventory_serials', methods=['POST'])

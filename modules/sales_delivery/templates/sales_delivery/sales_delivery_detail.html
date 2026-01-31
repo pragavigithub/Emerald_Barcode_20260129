@@ -735,6 +735,8 @@ function validateEnteredSerials() {
         return;
     }
     
+    const soDocEntry = {{ delivery.so_doc_entry }};
+    
     let validationPromises = serials.map(serial => {
         return fetch('{{ url_for("sales_delivery.api_validate_serial_availability") }}', {
             method: 'POST',
@@ -743,7 +745,7 @@ function validateEnteredSerials() {
                 serial_number: serial,
                 item_code: currentLineSerialData.item_code,
                 warehouse_code: currentLineSerialData.warehouse_code,
-                doc_entry:delivery.so_doc_entry
+                doc_entry: soDocEntry
             })
         })
         .then(response => response.json())
