@@ -721,7 +721,13 @@ function validateEnteredSerials() {
     const resultDiv = document.getElementById('validationResult');
     const errorDiv = document.getElementById('lineSerialError');
     
-    errorDiv.classList.add('d-none');
+    if (!resultContainer || !resultDiv) {
+        console.error('Validation elements not found in DOM');
+        alert('Error: Validation elements not found. Please try again.');
+        return;
+    }
+    
+    if (errorDiv) errorDiv.classList.add('d-none');
     resultContainer.classList.remove('d-none');
     resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Validating...</div>';
     
@@ -783,17 +789,25 @@ function saveLineSerials() {
     const errorDiv = document.getElementById('lineSerialError');
     const saveBtn = document.getElementById('saveLineSerialsBtn');
     
-    errorDiv.classList.add('d-none');
+    if (errorDiv) errorDiv.classList.add('d-none');
     
     if (serials.length === 0) {
-        errorDiv.textContent = 'Please enter at least one serial number.';
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = 'Please enter at least one serial number.';
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert('Please enter at least one serial number.');
+        }
         return;
     }
     
     if (serials.length > currentLineSerialData.open_quantity) {
-        errorDiv.textContent = `Cannot save ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = `Cannot save ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert(`Cannot save ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`);
+        }
         return;
     }
     
@@ -823,15 +837,23 @@ function saveLineSerials() {
             modal.hide();
             location.reload();
         } else {
-            errorDiv.textContent = data.error || 'Failed to save serials.';
-            errorDiv.classList.remove('d-none');
+            if (errorDiv) {
+                errorDiv.textContent = data.error || 'Failed to save serials.';
+                errorDiv.classList.remove('d-none');
+            } else {
+                alert(data.error || 'Failed to save serials.');
+            }
         }
     })
     .catch(error => {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Serials';
-        errorDiv.textContent = 'Error saving serials: ' + error.message;
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = 'Error saving serials: ' + error.message;
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert('Error saving serials: ' + error.message);
+        }
     });
 }
 
@@ -839,18 +861,28 @@ function validateAndAddSerials() {
     const serials = parseSerialInput();
     const errorDiv = document.getElementById('lineSerialError');
     const saveBtn = document.getElementById('saveLineSerialsBtn');
+    const resultDiv = document.getElementById('validationResult');
+    const resultContainer = document.getElementById('validationResultContainer');
     
-    errorDiv.classList.add('d-none');
+    if (errorDiv) errorDiv.classList.add('d-none');
     
     if (serials.length === 0) {
-        errorDiv.textContent = 'Please enter at least one serial number.';
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = 'Please enter at least one serial number.';
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert('Please enter at least one serial number.');
+        }
         return;
     }
     
     if (serials.length > currentLineSerialData.open_quantity) {
-        errorDiv.textContent = `Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = `Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`;
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert(`Cannot add ${serials.length} serials. Open quantity is only ${currentLineSerialData.open_quantity}.`);
+        }
         return;
     }
     
@@ -916,8 +948,12 @@ function validateAndAddSerials() {
     .catch(error => {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<i class="fas fa-check"></i> Validate & Add to Picked Items';
-        errorDiv.textContent = 'Error validating serials: ' + error.message;
-        errorDiv.classList.remove('d-none');
+        if (errorDiv) {
+            errorDiv.textContent = 'Error validating serials: ' + error.message;
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert('Error validating serials: ' + error.message);
+        }
     });
 }
 </script>
