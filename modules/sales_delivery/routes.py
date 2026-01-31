@@ -118,7 +118,8 @@ def index():
                     "so_doc_num": d.so_doc_num,
                     "card_code": d.card_code,
                     "card_name": d.card_name,
-                    "sap_doc_num": d.sap_doc_num,
+                    "status": d.status,
+                    "delivery_doc_num":d.sap_doc_num,
                     "created_at": d.created_at.isoformat()
                 } for d in deliveries
             ],
@@ -1181,7 +1182,7 @@ def api_post_delivery_to_sap():
             'CardCode': delivery.card_code or so_data.get('CardCode'),
             'DocDate': datetime.now().strftime('%Y-%m-%d'),
             'Comments': f'Delivery against SO {delivery.so_doc_num}',
-            'BPL_IDAssignedToInvoice': so_data.get('BPL_IDAssignedToInvoice', 1),
+            'BPL_IDAssignedToInvoice': so_data.get('BPL_IDAssignedToInvoice'),
             'DocumentLines': document_lines
         }
         
