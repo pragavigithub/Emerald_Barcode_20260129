@@ -756,6 +756,7 @@ function validateEnteredSerials() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 serial_number: serial,
+                base_line: currentLineSerialData.base_line,
                 item_code: currentLineSerialData.item_code,
                 warehouse_code: currentLineSerialData.warehouse_code,
                 doc_entry: soDocEntry
@@ -905,6 +906,7 @@ function validateAndAddSerials() {
         body: JSON.stringify({
             delivery_id: deliveryId,
             doc_entry: soDocEntry,
+            base_line: currentLineSerialData.base_line,
             item_code: currentLineSerialData.item_code,
             warehouse_code: currentLineSerialData.warehouse_code,
             serial_numbers: serials

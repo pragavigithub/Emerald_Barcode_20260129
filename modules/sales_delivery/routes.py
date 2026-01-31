@@ -890,6 +890,7 @@ def api_validate_serial_availability():
     try:
         data = request.get_json()
         print("datavalidate_serial_availability--->",data)
+        base_line=data.get('base_line')
         serial_number = data.get('serial_number', '').strip()
         item_code = data.get('item_code', '').strip()
         warehouse_code = data.get('warehouse_code', '').strip()
@@ -910,7 +911,7 @@ def api_validate_serial_availability():
             })
         
         sap = SAPIntegration()
-        so_data = sap.get_sales_order_by_doc_entry(doc_entry)
+        so_data = sap.get_sales_order_by_doc_entry_I(doc_entry)
         
         if not so_data:
             return jsonify({
@@ -920,7 +921,7 @@ def api_validate_serial_availability():
             })
         
         for line in so_data.get('DocumentLines', []):
-            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code:
+            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code and line.get('LineNum') == base_line:
                 serial_numbers_in_line = line.get('SerialNumbers', [])
                 for sn in serial_numbers_in_line:
                     if sn.get('InternalSerialNumber') == serial_number:
@@ -1286,6 +1287,7 @@ def api_validate_serials_against_so():
         print("Datat----->Vaidate JSON",data)
         delivery_id = data.get('delivery_id')
         doc_entry = data.get('doc_entry')
+        base_line = data.get('base_line')
         item_code = data.get('item_code', '').strip()
         warehouse_code = data.get('warehouse_code', '').strip()
         serial_numbers = data.get('serial_numbers', [])
@@ -1308,7 +1310,7 @@ def api_validate_serials_against_so():
         
         # Fetch SO data from SAP
         sap = SAPIntegration()
-        so_data = sap.get_sales_order_by_doc_entry(doc_entry)
+        so_data = sap.get_sales_order_by_doc_entry_I(doc_entry)
         
         if not so_data:
             return jsonify({
@@ -1319,7 +1321,7 @@ def api_validate_serials_against_so():
         # Find the line with matching ItemCode and WarehouseCode
         so_line = None
         for line in so_data.get('DocumentLines', []):
-            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code:
+            if line.get('ItemCode') == item_code and line.get('WarehouseCode') == warehouse_code and line.get('LineNum') == base_line:
                 so_line = line
                 break
         

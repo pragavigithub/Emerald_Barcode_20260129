@@ -859,48 +859,49 @@ class SAPIntegration:
             logging.error(f"Error fetching open SOs for series {series}: {str(e)}")
             return []
 
-    # def get_sales_order_by_doc_entry(self, doc_entry):
-    #     """Get Sales Order details from SAP B1 using DocEntry - only open documents and lines"""
-    #     if not self.ensure_logged_in():
-    #         logging.warning("SAP B1 not available, returning None")
-    #         return None
-    #
-    #     try:
-    #         url = f"{self.base_url}/b1s/v1/Orders?$filter=DocEntry eq {doc_entry}"
-    #         response = self.session.get(url, timeout=30)
-    #         if response.status_code == 200:
-    #             data = response.json()
-    #             if data.get('value'):
-    #                 so_data = data['value'][0]
-    #                 # Filter for open documents only
-    #                 if so_data.get('DocumentStatus') != 'bost_Open':
-    #                     logging.warning(f"Sales Order {doc_entry} is not open (Status: {so_data.get('DocumentStatus')})")
-    #                     return None
-    #
-    #                 # Filter for open lines only
-    #                 if 'DocumentLines' in so_data:
-    #                     open_lines = [
-    #                         line for line in so_data['DocumentLines']
-    #                         if line.get('LineStatus') == 'bost_Open'
-    #                     ]
-    #                     so_data['DocumentLines'] = open_lines
-    #
-    #                     if not open_lines:
-    #                         logging.warning(f"Sales Order {doc_entry} has no open lines")
-    #                         return None
-    #
-    #                 logging.info(f"✅ Retrieved SO DocEntry: {doc_entry}, DocNum: {so_data.get('DocNum')}, Open Lines: {len(so_data.get('DocumentLines', []))}")
-    #                 return so_data
-    #             else:
-    #                 logging.warning(f"No Sales Order found for DocEntry: {doc_entry}")
-    #                 return None
-    #         else:
-    #             logging.warning(f"Failed to get Sales Order by DocEntry: {response.status_code}")
-    #             return None
-    #
-    #     except Exception as e:
-    #         logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
-    #         return None
+    def get_sales_order_by_doc_entry_I(self, doc_entry):
+        """Get Sales Order details from SAP B1 using DocEntry - only open documents and lines"""
+        if not self.ensure_logged_in():
+            logging.warning("SAP B1 not available, returning None")
+            return None
+
+        try:
+            url = f"{self.base_url}/b1s/v1/Orders?$filter=DocEntry eq {doc_entry}"
+            response = self.session.get(url, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('value'):
+                    so_data = data['value'][0]
+                    # Filter for open documents only
+                    if so_data.get('DocumentStatus') != 'bost_Open':
+                        logging.warning(f"Sales Order {doc_entry} is not open (Status: {so_data.get('DocumentStatus')})")
+                        return None
+
+                    # Filter for open lines only
+                    if 'DocumentLines' in so_data:
+                        open_lines = [
+                            line for line in so_data['DocumentLines']
+                            if line.get('LineStatus') == 'bost_Open'
+                        ]
+                        so_data['DocumentLines'] = open_lines
+
+                        if not open_lines:
+                            logging.warning(f"Sales Order {doc_entry} has no open lines")
+                            return None
+
+                    logging.info(f"✅ Retrieved SO DocEntry: {doc_entry}, DocNum: {so_data.get('DocNum')}, Open Lines: {len(so_data.get('DocumentLines', []))}")
+                    return so_data
+                else:
+                    logging.warning(f"No Sales Order found for DocEntry: {doc_entry}")
+                    return None
+            else:
+                logging.warning(f"Failed to get Sales Order by DocEntry: {response.status_code}")
+                return None
+
+        except Exception as e:
+            logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
+            return None
+
     def get_sales_order_by_doc_entry(self, doc_entry):
         """Get Sales Order details from SAP B1 using DocEntry - only open documents and open lines (CrossJoin)"""
         if not self.ensure_logged_in():
