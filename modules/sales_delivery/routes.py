@@ -119,6 +119,7 @@ def index():
                     "card_code": d.card_code,
                     "card_name": d.card_name,
                     "status": d.status,
+                    "doc_total" : d.doc_Total,
                     "delivery_doc_num":d.sap_doc_num,
                     "created_at": d.created_at.isoformat()
                 } for d in deliveries
@@ -197,6 +198,7 @@ def create():
             card_code=so_data.get('CardCode'),
             card_name=so_data.get('CardName'),
             doc_currency=so_data.get('DocCurrency'),
+            doc_Total = so_data.get('DocTotal'),
             doc_date=datetime.now(),
             user_id=current_user.id
         )

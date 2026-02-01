@@ -912,7 +912,7 @@ class SAPIntegration:
             url = (
                 f"{self.base_url}/b1s/v1/$crossjoin(Orders,Orders/DocumentLines)"
                 f"?$expand="
-                f"Orders($select=DocEntry,DocNum,CardCode,CardName,DocumentStatus,Series,DocDate,DocDueDate,BPL_IDAssignedToInvoice),"
+                f"Orders($select=DocEntry,DocNum,CardCode,CardName,DocumentStatus,Series,DocDate,DocDueDate,BPL_IDAssignedToInvoice,DocTotal),"
                 f"Orders/DocumentLines($select=LineNum,ItemCode,ItemDescription,Quantity,"
                 f"WarehouseCode,LineStatus,RemainingOpenQuantity,UnitPrice)"
                 f"&$filter="

@@ -16,6 +16,7 @@ class DeliveryDocument(db.Model):
     doc_currency = db.Column(db.String(10), nullable=True)
     doc_date = db.Column(db.DateTime, nullable=True)
     delivery_series = db.Column(db.Integer, nullable=True)
+    doc_Total = db.Column(db.Float, nullable=True)
     status = db.Column(db.String(20), default='draft')  # draft, submitted, qc_approved, posted, rejected
     sap_doc_entry = db.Column(db.Integer, nullable=True, index=True)
     sap_doc_num = db.Column(db.Integer, nullable=True)

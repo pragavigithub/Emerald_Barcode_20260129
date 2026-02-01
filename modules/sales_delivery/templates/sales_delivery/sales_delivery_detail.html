@@ -34,67 +34,43 @@
 
     <div class="row">
         <!-- Sales Order Details -->
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
+
+            <div class="card-body">
+<div class="card shadow mb-4">
+<!--            <div class="col-md-12">-->
+            <div class="card shadow">
                 <div class="card-header py-3">
-                    <h6 class="breadcrumb-item active">Sales Order Details</h6>
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Transfer Document Information
+                    </h6>
                 </div>
                 <div class="card-body">
-                    <table class="table table-sm">
-                        <tr>
-                            <th width="40%">Customer Code:</th>
-                            <td>{{ delivery.card_code or so_data.CardCode or 'None' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Customer Name:</th>
-                            <td>{{ delivery.card_name or so_data.CardName or 'None' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Document Number:</th>
-                            <td>{{ delivery.so_doc_num or so_data.DocNum or 'None' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Currency:</th>
-                            <td>{{ delivery.doc_currency or so_data.DocCurrency or 'INR' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Status:</th>
-                            <td>
-                                {% if delivery.status == 'draft' %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Customer Code:</strong> <span class="badge bg-info">{{ delivery.card_code or so_data.CardCode or 'None' }}</span></p>
+                            <p><strong>Customer Name:</strong> <span class="badge bg-success">{{ delivery.card_name or so_data.CardName or 'None' }}</span></p>
+                        <p><strong>Status :</strong>
+                        {% if delivery.status == 'draft' %}
                                     <span class="badge bg-warning">Draft</span>
                                 {% elif delivery.status == 'submitted' %}
                                     <span class="badge bg-success">Submitted</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    </table>
+                            {% endif %}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Doc Num:</strong> <span class="badge bg-secondary">{{ delivery.so_doc_num or so_data.DocNum or 'None' }}</span></p>
+                            <p><strong>Currency :</strong> <span class="badge bg-secondary">{{ delivery.doc_currency or so_data.DocCurrency or 'INR' }}</span></p>
+                            <p><strong>Doc Total :</strong> <span class="badge bg-secondary">{{ delivery.doc_total or delivery.doc_total or '0' }}</span></p>
+                        </div>
+
+                    </div>
+
                 </div>
             </div>
-        </div>
 
-        <!-- Quick Actions -->
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="breadcrumb-item active">Quick Actions</h6>
-                </div>
-                <div class="card-body">
-                    {% if delivery.status == 'draft' %}
-                    <button type="button" class="btn btn-primary btn-lg w-100 mb-3" onclick="openScanModal()">
-                        <i class="fas fa-barcode"></i> Scan Barcode
-                    </button>
-                    <button type="button" class="btn btn-outline-primary btn-lg w-100" data-bs-toggle="modal" data-bs-target="#addItemModal">
-                        <i class="fas fa-plus"></i> Add Item Manually
-                    </button>
-                    {% else %}
-                    <div class="alert alert-info mb-0">
-                        Delivery note has been submitted. No further changes allowed.
-                    </div>
-                    {% endif %}
-                </div>
             </div>
         </div>
     </div>
+
 
     <!-- Picked Items -->
     <div class="card shadow mb-4">
