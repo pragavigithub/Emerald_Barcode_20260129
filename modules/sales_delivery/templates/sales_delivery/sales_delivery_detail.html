@@ -755,7 +755,7 @@ function validateEnteredSerials() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                serial_number: serial,
+                serial_numbers: [serial],
                 base_line: currentLineSerialData.base_line,
                 item_code: currentLineSerialData.item_code,
                 warehouse_code: currentLineSerialData.warehouse_code,
