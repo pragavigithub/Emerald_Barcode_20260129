@@ -275,6 +275,7 @@ def detail(delivery_id):
                 "id": delivery.id,
                 "so_doc_entry": delivery.so_doc_entry,
                 "so_doc_num": delivery.so_doc_num,
+                "doc_total": delivery.doc_Total,
                 "card_code": delivery.card_code,
                 "card_name": delivery.card_name,
                 "created_at": delivery.created_at.isoformat()
