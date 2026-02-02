@@ -875,25 +875,25 @@ function displayLabelsInTab(labels) {
 <!--                                <strong>PO:</strong> ${qrData.session_code || 'N/A'}-->
 <!--                            </div>-->
                             <div class="mb-2">
-                                <strong>Item:</strong> ${qrData.item_code || 'N/A'}
+                                <strong>Item:</strong> ${qrData.item || 'N/A'}
                             </div>
                             <div class="mb-2">
-                                <strong>Lot:</strong> ${batchDisplay}
+                                <strong>Lot:</strong> ${qrData.batch}
                             </div>
                             <div class="mb-2">
-                                <strong>Qty:</strong> ${qrData.quantity || 1}
+                                <strong>Qty:</strong> ${qrData.qty || 1}
                             </div>
                             <div class="mb-2">
-                                <strong>From:</strong> ${qrData.from_warehouse || 'N/A'}
-                                ${qrData.from_bin_code ? ` (Location: ${qrData.from_bin_code})` : ''}
+<!--                                <strong>From:</strong> ${qrData.from_warehouse || 'N/A'}-->
+                                 <strong>Location:</strong>${qrData.bin}
                             </div>
                             <div class="mb-2">
-                                <strong>To:</strong> ${qrData.to_warehouse || 'N/A'}
-                                ${qrData.to_bin_code ? ` (Location: ${qrData.to_bin_code})` : ''}
+<!--                                <strong>To:</strong> ${qrData.to_warehouse || 'N/A'}-->
+<!--                                ${qrData.bin ? ` (Location: ${qrData.bin})` : ''}-->
                             </div>
-                            <div>
-                                <strong>MnfDate:</strong> ${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}
-                            </div>
+<!--                            <div>-->
+<!--                                <strong>MnfDate:</strong> ${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}-->
+<!--                            </div>-->
                         </div>
                     </div>
                     <div class="card-footer text-center">
@@ -965,7 +965,8 @@ function showPackConfigurationModal(approvedItems) {
                         <div class="col-md-6">
                             <label class="form-label">Number of Packs</label>
                             <input type="number" class="form-control pack-count" data-item-id="${item.id}"
-                                   data-approved-qty="${approvedQty}" value="${defaultPacks}" min="1">
+                                   data-approved-qty="${approvedQty}" value="1" min="1">
+                                   <!-- data-approved-qty="${approvedQty}" value="${defaultPacks}" min="1">  -->
                         </div>
                     </div>
 
@@ -1281,9 +1282,9 @@ function displayLabelsForPrint(labels) {
             // Build batch info display
             let batchDisplay = 'N/A';
             if (qrData.batch_info) {
-                batchDisplay = `${qrData.batch_info.batch_number} (${qrData.batch_info.item_code})`;
+                batchDisplay = `${qrData.batch} (${qrData.item})`;
             } else if (qrData.batch_number) {
-                batchDisplay = qrData.batch_number;
+                batchDisplay = qrData.batch;
             }
 
             labelsHTML += `
@@ -1304,38 +1305,38 @@ function displayLabelsForPrint(labels) {
 
                         <div class="label-info-row">
                             <div class="label-info-label">Item Code:</div>
-                            <div class="label-info-value">${qrData.item_code || 'N/A'}</div>
+                            <div class="label-info-value">${qrData.item || 'N/A'}</div>
                         </div>
 
-                        <div class="label-info-row">
-                            <div class="label-info-label">Item Name:</div>
-                            <div class="label-info-value">${qrData.item_name || 'N/A'}</div>
-                        </div>
+<!--                        <div class="label-info-row">-->
+<!--                            <div class="label-info-label">Item Name:</div>-->
+<!--                            <div class="label-info-value">${qrData.item_name || 'N/A'}</div>-->
+<!--                        </div>-->
 
                         <div class="label-info-row">
                             <div class="label-info-label">Lot:</div>
-                            <div class="label-info-value">${batchDisplay}</div>
+                            <div class="label-info-value">${qrData.batch}</div>
                         </div>
 
                         <div class="label-info-row">
                             <div class="label-info-label">Qty per Pack:</div>
-                            <div class="label-info-value">${qrData.quantity || 1}</div>
+                            <div class="label-info-value">${qrData.qty || 1}</div>
                         </div>
 
-                        <div class="label-info-row">
-                            <div class="label-info-label">From Warehouse:</div>
-                            <div class="label-info-value">${qrData.from_warehouse || 'N/A'}${qrData.from_bin_code ? ` (Loc: ${qrData.from_bin_code})` : ''}</div>
-                        </div>
+<!--                        <div class="label-info-row">-->
+<!--                            <div class="label-info-label">From Warehouse:</div>-->
+<!--                            <div class="label-info-value">${qrData.from_warehouse || 'N/A'}${qrData.from_bin_code ? ` (Loc: ${qrData.from_bin_code})` : ''}</div>-->
+<!--                        </div>-->
 
                         <div class="label-info-row">
-                            <div class="label-info-label">To Warehouse:</div>
-                            <div class="label-info-value">${qrData.to_warehouse || 'N/A'}${qrData.to_bin_code ? ` (Loc: ${qrData.to_bin_code})` : ''}</div>
+                            <div class="label-info-label">Location:</div>
+                            <div class="label-info-value">${qrData.bin || 'N/A'}</div>
                         </div>
 
-                        <div class="label-info-row">
-                            <div class="label-info-label">GRN Date:</div>
-                            <div class="label-info-value">${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}</div>
-                        </div>
+<!--                        <div class="label-info-row">-->
+<!--                            <div class="label-info-label">GRN Date:</div>-->
+<!--                            <div class="label-info-value">${new Date(qrData.timestamp).toLocaleDateString() || 'N/A'}</div>-->
+<!--                        </div>-->
                     </div>
 
                     <div class="label-number">Pack: ${label.label_number} of ${label.total_labels}</div>

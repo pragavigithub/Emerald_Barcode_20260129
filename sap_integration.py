@@ -2371,7 +2371,7 @@ class SAPIntegration:
                     for batch_index, batch in enumerate(line["BatchNumbers"]):
                         batch_qty = float(batch["Quantity"])
 
-                        if item.from_bin:
+                        if item.from_bin != 'N/A':
                             line["StockTransferLinesBinAllocations"].append({
                                 "BinActionType": "batFromWarehouse",
                                 "BinAbsEntry": self.get_bin_abs_entry(
@@ -2382,7 +2382,7 @@ class SAPIntegration:
                                 "SerialAndBatchNumbersBaseLine": batch_index
                             })
 
-                        if item.to_bin:
+                        if item.to_bin != 'N/A':
                             line["StockTransferLinesBinAllocations"].append({
                                 "BinActionType": "batToWarehouse",
                                 "BinAbsEntry": self.get_bin_abs_entry(
@@ -2395,7 +2395,7 @@ class SAPIntegration:
 
                 # ✅ CASE 2: NON-BATCH ITEMS → single bin allocation
                 else:
-                    if item.from_bin:
+                    if item.from_bin != 'N/A':
                         line["StockTransferLinesBinAllocations"].append({
                             "BinActionType": "batFromWarehouse",
                             "BinAbsEntry": self.get_bin_abs_entry(
@@ -2406,7 +2406,7 @@ class SAPIntegration:
                             "SerialAndBatchNumbersBaseLine": 0
                         })
 
-                    if item.to_bin:
+                    if item.to_bin != 'N/A':
                         line["StockTransferLinesBinAllocations"].append({
                             "BinActionType": "batToWarehouse",
                             "BinAbsEntry": self.get_bin_abs_entry(
@@ -2450,6 +2450,7 @@ class SAPIntegration:
         }
 
         logging.info("📤 Final Payload Sent to SAP:")
+        print("transfer_datatransfer_datatransfer_datatransfer_datatransfer_datatransfer_data-->",transfer_data)
         logging.info(json.dumps(transfer_data, indent=2))
 
         # -------------------------------------------------------
@@ -3286,6 +3287,7 @@ class SAPIntegration:
             
             # Execute PATCH request to SAP B1
             logging.info(f"Sending PATCH request to {url}")
+            print("payload----->",payload,"url-->",url)
             logging.info(f"Payload: {json.dumps(payload, indent=2)}")
             
             response = self.session.patch(url, json=payload, timeout=30)

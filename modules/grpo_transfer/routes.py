@@ -2158,15 +2158,15 @@ def generate_qr_labels(session_id):
             
             for label_num in range(1, approved_qty + 1):
                 qr_data = {
-                    'session_code': session.session_code,
+                    #'session_code': session.session_code,
                     'item_code': item.item_code,
                     'item_name': item.item_name,
                     'quantity': 1,
-                    'label': f'{label_num} of {approved_qty}',
+                    #'label': f'{label_num} of {approved_qty}',
                     'from_warehouse': item.from_warehouse,
                     'to_warehouse': item.to_warehouse,
                     'batch_number': item.batches[0].batch_number if item.batches else None,
-                    'timestamp': datetime.now().isoformat()
+                    #'timestamp': datetime.now().isoformat()
                 }
                 
                 label = GRPOTransferQRLabel(
@@ -2286,31 +2286,32 @@ def generate_qr_labels_with_packs(session_id):
                         logger.info(f"Creating batch label: item={item.item_code}, batch={batch.batch_number}, pack_num={pack_num}, pack_qty={pack_qty}")
                         
                         qr_data = {
-                            'session_code': session.session_code,
-                            'grpo_doc_num': session.grpo_doc_num,
-                            'grpo_doc_entry': session.grpo_doc_entry,
-                            'item_code': item.item_code,
-                            'item_name': item.item_name,
-                            'batch_number': batch.batch_number,
-                            'approved_quantity': pack_qty,
-                            'rejected_quantity': 0,
-                            'quantity': pack_qty,
+                            #'session_code': session.session_code,
+                            #'grpo_doc_num': session.grpo_doc_num,
+                            #'grpo_doc_entry': session.grpo_doc_entry,
+                            'item': item.item_code,
+                            #'item_name': item.item_name,
+                            'batch': batch.batch_number,
+                            'id' : 'grpo_qc',
+                            #'approved_quantity': pack_qty,
+                            #'rejected_quantity': 0,
+                            'qty': pack_qty,
                             'pack': f'{pack_num} of {pack_count}',
-                            'from_warehouse': item.from_warehouse,
-                            'from_bin_code': item.from_bin_code,
-                            'to_warehouse': item.to_warehouse,
-                            'to_bin_code': item.to_bin_code,
-                            'batch_info': {
-                                'batch_number': batch.batch_number,
-                                'item_code': item.item_code,
-                                'item_name': item.item_name,
-                                'batch_quantity': batch.batch_quantity,
-                                'approved_quantity': batch.approved_quantity,
-                                'rejected_quantity': batch.rejected_quantity,
-                                'expiry_date': batch.expiry_date.isoformat() if batch.expiry_date else None,
-                                'manufacture_date': batch.manufacture_date.isoformat() if batch.manufacture_date else None
-                            },
-                            'timestamp': datetime.now().isoformat()
+                            # 'from_warehouse': item.from_warehouse,
+                            # 'from_bin_code': item.from_bin_code,
+                            # 'to_warehouse': item.to_warehouse,
+                            'bin': item.to_bin_code,
+                            # 'batch_info': {
+                            #     'batch_number': batch.batch_number,
+                            #     'item_code': item.item_code,
+                            #     'item_name': item.item_name,
+                            #     'batch_quantity': batch.batch_quantity,
+                            #     'approved_quantity': batch.approved_quantity,
+                            #     'rejected_quantity': batch.rejected_quantity,
+                            #     #'expiry_date': batch.expiry_date.isoformat() if batch.expiry_date else None,
+                            #    # 'manufacture_date': batch.manufacture_date.isoformat() if batch.manufacture_date else None
+                            # },
+                            #'timestamp': datetime.now().isoformat()
                         }
                         
                         label = GRPOTransferQRLabel(
@@ -2342,22 +2343,23 @@ def generate_qr_labels_with_packs(session_id):
                     logger.info(f"Creating non-batch label: item={item.item_code}, pack_num={pack_num}, pack_qty={pack_qty}")
                     
                     qr_data = {
-                        'session_code': session.session_code,
-                        'grpo_doc_num': session.grpo_doc_num,
-                        'grpo_doc_entry': session.grpo_doc_entry,
-                        'item_code': item.item_code,
-                        'item_name': item.item_name,
-                        'batch_number': None,
-                        'approved_quantity': pack_qty,
-                        'rejected_quantity': 0,
-                        'quantity': pack_qty,
+                        # 'session_code': session.session_code,
+                        # 'grpo_doc_num': session.grpo_doc_num,
+                        # 'grpo_doc_entry': session.grpo_doc_entry,
+                        'item': item.item_code,
+                        #'item_name': item.item_name,
+                        # 'batch_number': None,
+                        # 'approved_quantity': pack_qty,
+                        # 'rejected_quantity': 0,
+                        'id': 'grpo_qc',
+                        'qty': pack_qty,
                         'pack': f'{pack_num} of {pack_count}',
-                        'from_warehouse': item.from_warehouse,
-                        'from_bin_code': item.from_bin_code,
-                        'to_warehouse': item.to_warehouse,
-                        'to_bin_code': item.to_bin_code,
-                        'batch_info': None,
-                        'timestamp': datetime.now().isoformat()
+                        # 'from_warehouse': item.from_warehouse,
+                        # 'from_bin_code': item.from_bin_code,
+                        # 'to_warehouse': item.to_warehouse,
+                        'bin': item.to_bin_code,
+                        #'batch_info': None,
+                        #'timestamp': datetime.now().isoformat()
                     }
                     
                     label = GRPOTransferQRLabel(
