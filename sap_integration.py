@@ -2214,7 +2214,7 @@ class SAPIntegration:
             line = {
                 "LineNum": index,
                 "ItemCode": item.item_code,
-                "Quantity": float(item.quantity),
+                "Quantity": float(item.transferred_quantity),
                 "WarehouseCode": transfer_doc_items.to_warehouse_code,
                 "FromWarehouseCode": transfer_doc_items.from_warehouse_code,
                 "UoMCode": actual_uom
@@ -2251,7 +2251,8 @@ class SAPIntegration:
                         if isinstance(batches_list, list):
                             for b in batches_list:
                                 bn = b.get("batch_number")
-                                qty = float(b.get("quantity", 0))
+                                #qty = float(b.get("quantity", 0))
+                                qty = float(item.transferred_quantity)
                                 if bn and qty > 0:
                                     batch_map[bn] = batch_map.get(bn, 0) + qty
                     except Exception as e:
@@ -2274,7 +2275,7 @@ class SAPIntegration:
                 line["BatchNumbers"] = [
                     {
                         "BatchNumber": bn,
-                        "Quantity": qty
+                        "Quantity": item.transferred_quantity
                     }
                     for bn, qty in batch_map.items()
                 ]
@@ -2369,7 +2370,7 @@ class SAPIntegration:
                 if batch_managed and line.get("BatchNumbers"):
 
                     for batch_index, batch in enumerate(line["BatchNumbers"]):
-                        batch_qty = float(batch["Quantity"])
+                        batch_qty = float(item.transferred_quantity)
 
                         if item.from_bin != 'N/A':
                             line["StockTransferLinesBinAllocations"].append({
@@ -2402,7 +2403,7 @@ class SAPIntegration:
                                 item.from_bin,
                                 transfer_doc_items.from_warehouse_code
                             ),
-                            "Quantity": float(item.quantity),
+                            "Quantity": float(item.transferred_quantity),
                             "SerialAndBatchNumbersBaseLine": 0
                         })
 
@@ -2413,7 +2414,7 @@ class SAPIntegration:
                                 item.to_bin,
                                 transfer_doc_items.to_warehouse_code
                             ),
-                            "Quantity": float(item.quantity),
+                            "Quantity": float(item.transferred_quantity),
                             "SerialAndBatchNumbersBaseLine": 0
                         })
 

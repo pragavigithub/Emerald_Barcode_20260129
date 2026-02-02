@@ -2159,13 +2159,16 @@ def inventory_transfer_detail(transfer_id):
                 to_whs = payload.get("to_warehouse", "").strip()
                 from_bin = payload.get("from_bin", "").strip()
                 to_bin = payload.get("to_bin", "").strip()
-                batch_number = payload.get("batch_number").strip()
-                GRN_id = payload.get("grn_id", "").strip()  # 🔥 SCANNED GRN ID
+                if payload.get("batch_number") == None:
+                    batch_number = 'N/A'
+                else:
+                    batch_number = payload.get("batch_number").strip()
+                GRN_id = payload.get("grn_id", "")  # 🔥 SCANNED GRN ID
                 print("maasfmbsfbsf---->",GRN_id)
                 # -----------------------------------------------------------
                 # 🔥 NEW: CHECK GRN ALREADY EXISTS IN THIS TRANSFER
                 # -----------------------------------------------------------
-                if GRN_id != 'grpo_qc':
+                if GRN_id:
                     exists = InventoryTransferItem.query.filter_by(
                         inventory_transfer_id=transfer.id,
                         grn_id=GRN_id
@@ -2185,17 +2188,15 @@ def inventory_transfer_detail(transfer_id):
                         ).first()
                     # Insert new record
                     remaining_qqty = docDetails.remaining_open_quantity - quantity;
+                if docDetails.quantity < quantity :
 
-                    #print("docDetails test",docDetails.remaining_open_quantity,docDetails.quantity,docDetails.from_warehouse_code,docDetails.warehouse_code,docDetails.uom_code)
-                    #print("rememei-->",remaining_qqty )
-                    #print("itemType---->",itemType)
                     new_item = InventoryTransferItem(
                         inventory_transfer_id=transfer.id,
                         item_code=itemType.get("item_code"),
                         item_name=itemType.get("item_name"),
                         quantity=quantity,
                         grn_id=GRN_id,  # 🔥 Stored here
-                        transferred_quantity=quantity,
+                        transferred_quantity=docDetails.quantity,
                         remaining_quantity=remaining_qqty,
                         unit_of_measure=docDetails.uom_code,
                         from_warehouse_code=docDetails.from_warehouse_code,
@@ -2272,9 +2273,6 @@ def inventory_transfer_detail(transfer_id):
                     # Insert new record
                     remaining_qqty = docDetails.remaining_open_quantity - quantity;
 
-                    # print("docDetails test",docDetails.remaining_open_quantity,docDetails.quantity,docDetails.from_warehouse_code,docDetails.warehouse_code,docDetails.uom_code)
-                    # print("rememei-->",remaining_qqty )
-                    # print("itemType---->",itemType)
                     new_item = InventoryTransferItem(
                         inventory_transfer_id=transfer.id,
                         item_code=itemType.get("item_code"),
@@ -2351,70 +2349,6 @@ def inventory_transfer_detail(transfer_id):
                 db.session.rollback()
                 return jsonify({"success": False, "error": str(e)}), 500
 
-        # ============================================================
-        # 📌 CASE 2: HTML TEMPLATE POST
-        # ============================================================
-        # else:
-        #     try:
-        #         item_code = request.form.get('item_code', '').strip()
-        #         item_name = request.form.get('item_name', '').strip()
-        #         quantity = float(request.form.get('quantity', 0))
-        #         uom = request.form.get('unit_of_measure', '').strip()
-        #         from_warehouse = request.form.get('from_warehouse', '').strip()
-        #         to_warehouse = request.form.get('to_warehouse', '').strip()
-        #         from_bin = request.form.get('from_bin', '')
-        #         to_bin = request.form.get('to_bin', '')
-        #         batch_number = request.form.get('batch_number', '').strip()
-        #         if GRN_id:
-        #             exists = InventoryTransferItem.query.filter_by(
-        #                 inventory_transfer_id=transfer.id,
-        #                 grn_id=GRN_id
-        #             ).first()
-        #             if exists == None:
-        #                item_details = sap.get_item_details(item_code)
-        #                actual_uom = item_details.get("InventoryUoM", uom) if item_details else uom
-        #                docDetails = InventoryTransferRequestLine.query.filter_by(
-        #                     inventory_transfer_id=transfer_id,
-        #                     item_code=item_code
-        #                 ).first()
-        #             remaining_qqty = docDetails.remaining_open_quantity - quantity;
-        #             new_item = InventoryTransferItem(
-        #             inventory_transfer_id=transfer.id,
-        #             item_code=item_code,
-        #             item_name=item_name,
-        #             quantity=quantity,
-        #             # requested_quantity=quantity,
-        #             unit_of_measure=docDetails.uom_code ,
-        #             from_warehouse_code=docDetails.from_warehouse_code ,
-        #             to_warehouse_code=docDetails.warehouse_code ,
-        #             requested_quantity=docDetails.quantity ,
-        #             transferred_quantity=0,
-        #             remaining_quantity=remaining_qqty,
-        #             # unit_of_measure=actual_uom,
-        #             # from_warehouse_code=from_warehouse,
-        #             # to_warehouse_code=to_warehouse,
-        #             from_bin_location=from_bin,
-        #             to_bin_location=to_bin,
-        #             batch_number=batch_number if batch_number else None
-        #         )
-        #
-        #         db.session.add(new_item)
-        #         db.session.commit()
-        #         updateTransScanStatus = TransferScanState.query.filter_by(
-        #                     transfer_id=transfer_id,
-        #                     grn_id=GRN_id,
-        #                     transfer_status = 'pending'
-        #                 ).first()
-        #         if updateTransScanStatus:
-        #                 updateTransScanStatus.transfer_status = 'transferred'
-        #                 db.session.commit()
-        #         flash(f"Item {item_code} added successfully!", "success")
-        #         return redirect(url_for("inventory_transfer_detail", transfer_id=transfer_id))
-        #
-        #     except Exception as e:
-        #         db.session.rollback()
-        #         flash(f"Error adding item: {str(e)}", "error")
-        #         return redirect(url_for("inventory_transfer_detail", transfer_id=transfer_id))
         else:
             try:
                 item_code = request.form.get('item_code', '').strip()

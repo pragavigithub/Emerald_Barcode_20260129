@@ -2458,6 +2458,7 @@ def api_scan_qr_label():
         # =========================================================
         existing_grn = TransferScanState.query.filter_by(
             transfer_id=transfer_id,
+            item_code=item_code,
             grn_id=grn_id,
             transfer_status = 'verified'
         ).first()
@@ -2492,7 +2493,9 @@ def api_scan_qr_label():
         # ==== STEP 4: Calculate totals and validate limits ====
         scanned_packs = TransferScanState.query.filter_by(
             transfer_id=transfer_id,
-            item_code=item_code
+            item_code=item_code,
+            transfer_status= 'verified',
+            grn_id=grn_id
         ).all()
         print("scanned_packs-->",scanned_packs)
         pack_qty = parsed_data.get('qty', 0)
@@ -2505,17 +2508,17 @@ def api_scan_qr_label():
             else (scanned_packs[0].requested_qty if scanned_packs else 0)
         )
 
-        if new_total > effective_requested_qty > 0:
-            return jsonify({
-                'success': False,
-                'error': (
-                    f'Scanning this pack exceeds requested quantity! '
-                    f'Current: {current_total}, Adding: {pack_qty}, Requested: {effective_requested_qty}'
-                ),
-                'overflow': True,
-                'current_total': current_total,
-                'requested_qty': effective_requested_qty
-            }), 400
+        # if new_total > effective_requested_qty > 0:
+        #     return jsonify({
+        #         'success': False,
+        #         'error': (
+        #             f'Scanning this pack exceeds requested quantity! '
+        #             f'Current: {current_total}, Adding: {pack_qty}, Requested: {effective_requested_qty}'
+        #         ),
+        #         'overflow': True,
+        #         'current_total': current_total,
+        #         'requested_qty': effective_requested_qty
+        #     }), 400
 
         # ==== STEP 5: Insert new scan ====
         new_scan = TransferScanState(
@@ -2532,7 +2535,7 @@ def api_scan_qr_label():
             exp_date=parsed_data.get('exp_date', ''),
             po=parsed_data.get('po', ''),
             bin_location=parsed_data.get('bin_location', ''),
-            transfer_status = ('pending')
+            transfer_status = ('verified')
         )
 
         db.session.add(new_scan)
