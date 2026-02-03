@@ -635,6 +635,7 @@ class SAPIntegration:
             return {'success': False, 'error': 'SAP B1 connection unavailable'}
 
         try:
+            print("transfer_datatransfer_datatransfer_data------------------>",transfer_data)
             url = f"{self.base_url}/b1s/v1/StockTransfers"
             logging.info(f"📤 Posting Stock Transfer to SAP B1 (JSON payload method)")
             logging.info(f"Payload: {json.dumps(transfer_data, indent=2)}")
@@ -1728,7 +1729,8 @@ class SAPIntegration:
             return None
 
         try:
-            url = f"{self.base_url}/b1s/v1/BinLocations?$filter=BinCode eq '{bin_code}' and Warehouse eq '{warehouse_code}'"
+            print ("usdududududududud---------------------><><><>")
+            url = f"{self.base_url}/b1s/v1/BinLocations?$select=AbsEntry&$filter=BinCode eq '{bin_code}' and Warehouse eq '{warehouse_code}'"
             response = self.session.get(url)
 
             if response.status_code == 200:

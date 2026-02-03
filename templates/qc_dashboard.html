@@ -1141,7 +1141,7 @@ function showSerialItemTransferRejectionModal(transferId, transferNumber) {
 // Direct Inventory Transfer approval functions
 function showDirectTransferApprovalModal(transferId, transferNumber) {
     document.getElementById('approvalPONumber').textContent = transferNumber;
-    document.getElementById('approvalForm').action = `/direct_inventory_transfer/${transferId}/qc_approve`;
+    document.getElementById('approvalForm').action = `/direct-inventory-transfer/id/${transferId}/qc_approve`;
     document.querySelector('#approvalModal .modal-title').textContent = 'Approve Direct Inventory Transfer';
     const alertDiv = document.querySelector('#approvalModal .alert');
     alertDiv.innerHTML = `

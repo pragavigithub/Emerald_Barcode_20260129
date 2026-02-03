@@ -10,7 +10,7 @@ from models import DirectInventoryTransfer, DirectInventoryTransferItem, Documen
 from sap_integration import SAPIntegration
 
 # Use absolute path for template_folder to support PyInstaller .exe builds
-direct_inventory_transfer_bp = Blueprint('direct_inventory_transfer', __name__, 
+direct_inventory_transfer_bp = Blueprint('direct_inventory_transfer', __name__,
                                          url_prefix='/direct-inventory-transfer',
                                          template_folder=str(Path(__file__).resolve().parent / 'templates'))
 
@@ -263,147 +263,6 @@ def create():
             return render_template('direct_inventory_transfer/create.html')
 
     return render_template('direct_inventory_transfer/create.html')
-
-
-# @direct_inventory_transfer_bp.route('/create', methods=['GET', 'POST'])
-# @login_required
-# def create():
-#     """Create new Direct Inventory Transfer with first item included"""
-#     if not current_user.has_permission('direct_inventory_transfer'):
-#         flash('Access denied - Direct Inventory Transfer permissions required', 'error')
-#         return redirect(url_for('dashboard'))
-#
-#     if request.method == 'POST':
-#         try:
-#             transfer_number = generate_direct_transfer_number()
-#             print("transfer_number--->", transfer_number)
-#             item_code = request.form.get('item_code', '').strip()
-#             item_type = request.form.get('item_type', 'none')
-#             quantity = float(request.form.get('quantity', 1))
-#             from_warehouse = request.form.get('from_warehouse')
-#             to_warehouse = request.form.get('to_warehouse')
-#             from_bin = request.form.get('from_bin', '')
-#             to_bin = request.form.get('to_bin', '')
-#             notes = request.form.get('notes', '')
-#             serial_numbers_str = request.form.get('serial_numbers', '').strip()
-#             batch_number = request.form.get('batch_number', '').strip()
-#
-#             if not all([item_code, from_warehouse, to_warehouse]):
-#                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-#                     return jsonify({'success': False, 'error': 'Item Code, From Warehouse and To Warehouse are required'}), 400
-#                 flash('Item Code, From Warehouse and To Warehouse are required', 'error')
-#                 return render_template('direct_inventory_transfer/create.html')
-#
-#             if from_warehouse == to_warehouse:
-#                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-#                     return jsonify({'success': False, 'error': 'From Warehouse and To Warehouse must be different'}), 400
-#                 flash('From Warehouse and To Warehouse must be different', 'error')
-#                 return render_template('direct_inventory_transfer/create.html')
-#
-#             sap = SAPIntegration()
-#             if not sap.ensure_logged_in():
-#                 flash('SAP B1 authentication failed', 'error')
-#                 return render_template('direct_inventory_transfer/create.html')
-#
-#             validation_result = sap.validate_item_for_direct_transfer(item_code)
-#
-#             if not validation_result.get('valid'):
-#                 flash(f'Item validation failed: {validation_result.get("error", "Unknown error")}', 'error')
-#                 return render_template('direct_inventory_transfer/create.html')
-#
-#             item_type_validated = validation_result.get('item_type', 'none')
-#             is_serial_managed = validation_result.get('is_serial_managed', False)
-#             is_batch_managed = validation_result.get('is_batch_managed', False)
-#
-#             serial_numbers_json = None
-#             serial_numbers_list = []
-#
-#             if is_serial_managed:
-#                 if not serial_numbers_str:
-#                     flash('Serial numbers are required for serial-managed items', 'error')
-#                     return render_template('direct_inventory_transfer/create.html')
-#
-#                 serial_numbers_list = [sn.strip() for sn in serial_numbers_str.split(',') if sn.strip()]
-#
-#                 if len(serial_numbers_list) != int(quantity):
-#                     flash(f'Number of serial numbers ({len(serial_numbers_list)}) must match quantity ({int(quantity)})', 'error')
-#                     return render_template('direct_inventory_transfer/create.html')
-#
-#                 serial_numbers_json = json.dumps(serial_numbers_list)
-#
-#             elif is_batch_managed:
-#                 if not batch_number:
-#                     flash('Batch number is required for batch-managed items', 'error')
-#                     return render_template('direct_inventory_transfer/create.html')
-#
-#             transfer = DirectInventoryTransfer(
-#                 transfer_number=transfer_number,
-#                 user_id=current_user.id,
-#                 from_warehouse=from_warehouse,
-#                 to_warehouse=to_warehouse,
-#                 from_bin=from_bin,
-#                 to_bin=to_bin,
-#                 notes=notes,
-#                 status='draft'
-#             )
-#
-#             db.session.add(transfer)
-#             db.session.flush()
-#
-#             if is_serial_managed:
-#                 serial_numbers_list = [sn.strip() for sn in serial_numbers_str.split(',') if sn.strip()]
-#                 for serial in serial_numbers_list:
-#                     transfer_item = DirectInventoryTransferItem(
-#                         direct_inventory_transfer_id=transfer.id,
-#                         item_code=validation_result.get('item_code'),
-#                         item_description=validation_result.get('item_description'),
-#                         barcode=item_code,
-#                         item_type=item_type_validated,
-#                         quantity=1.0,
-#                         from_warehouse_code=from_warehouse,
-#                         to_warehouse_code=to_warehouse,
-#                         from_bin_code=from_bin,
-#                         to_bin_code=to_bin,
-#                         batch_number=None,
-#                         serial_numbers=json.dumps([serial]),
-#                         validation_status='validated',
-#                         qc_status='pending'
-#                     )
-#                     db.session.add(transfer_item)
-#             else:
-#                 transfer_item = DirectInventoryTransferItem(
-#                     direct_inventory_transfer_id=transfer.id,
-#                     item_code=validation_result.get('item_code'),
-#                     item_description=validation_result.get('item_description'),
-#                     barcode=item_code,
-#                     item_type=item_type_validated,
-#                     quantity=quantity,
-#                     from_warehouse_code=from_warehouse,
-#                     to_warehouse_code=to_warehouse,
-#                     from_bin_code=from_bin,
-#                     to_bin_code=to_bin,
-#                     batch_number=batch_number if is_batch_managed else None,
-#                     serial_numbers=None,
-#                     validation_status='validated',
-#                     qc_status='pending'
-#                 )
-#                 db.session.add(transfer_item)
-#
-#             db.session.commit()
-#
-#             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-#                 return redirect(url_for('direct_inventory_transfer.detail', transfer_id=transfer.id))
-#
-#             flash(f'Direct Inventory Transfer {transfer_number} created successfully with item {item_code}', 'success')
-#             return redirect(url_for('direct_inventory_transfer.detail', transfer_id=transfer.id))
-#
-#         except Exception as e:
-#             db.session.rollback()
-#             logging.error(f"Error creating direct inventory transfer: {str(e)}")
-#             flash(f'Error creating transfer: {str(e)}', 'error')
-#             return render_template('direct_inventory_transfer/create.html')
-#
-#     return render_template('direct_inventory_transfer/create.html')
 
 
 @direct_inventory_transfer_bp.route('/<int:transfer_id>', methods=['GET'])
@@ -710,7 +569,6 @@ def add_item(transfer_id):
     """Add item to Direct Inventory Transfer with SAP validation"""
     try:
         transfer = DirectInventoryTransfer.query.get_or_404(transfer_id)
-        print("transfer_idtransfer_id---->",transfer)
         if transfer.user_id != current_user.id and current_user.role not in ['admin', 'manager']:
             return jsonify({'success': False, 'error': 'Access denied'}), 403
 
@@ -980,7 +838,7 @@ def submit_transfer(transfer_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@direct_inventory_transfer_bp.route('/<int:transfer_id>/qc_approve', methods=['POST'])
+@direct_inventory_transfer_bp.route('/id/<int:transfer_id>/qc_approve', methods=['POST'])
 @login_required
 def qc_approve_transfer(transfer_id):
     """QC approve Direct Inventory Transfer and post to SAP B1 (called from QC dashboard)"""
@@ -1004,48 +862,76 @@ def qc_approve_transfer(transfer_id):
         for item in transfer.items:
             item.qc_status = 'approved'
 
-        # Prepare multi-line SAP payload
         sap = SAPIntegration()
         if not sap.ensure_logged_in():
             db.session.rollback()
             return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
 
-        # Group items by ItemCode to create proper transfer lines
         items_by_code = {}
         line_num = 0
-        
+
         for item in transfer.items:
             item_code = item.item_code
+
             serial_numbers = json.loads(item.serial_numbers) if item.serial_numbers else []
-            
+
+            from_bin_abs = sap.get_bin_abs_entry(item.from_bin_code ,
+                item.from_warehouse_code
+            )
+
+            to_bin_abs = sap.get_bin_abs_entry(item.to_bin_code ,
+                item.to_warehouse_code
+            )
+
             if item_code not in items_by_code:
                 items_by_code[item_code] = {
                     "LineNum": line_num,
                     "ItemCode": item_code,
                     "Quantity": 0,
-                    "WarehouseCode": item.to_warehouse_code,
                     "FromWarehouseCode": item.from_warehouse_code,
+                    "WarehouseCode": item.to_warehouse_code,
                     "SerialNumbers": [],
-                    "BatchNumbers": [],
                     "StockTransferLinesBinAllocations": []
                 }
                 line_num += 1
-            
-            # Add serial numbers and update quantity
-            for serial in serial_numbers:
-                items_by_code[item_code]["SerialNumbers"].append({
+
+            line = items_by_code[item_code]
+
+            for serial_index, serial in enumerate(serial_numbers):
+                line["SerialNumbers"].append({
                     "InternalSerialNumber": serial,
-                    "Quantity": 1
+                    "Quantity": 1.0
                 })
-                items_by_code[item_code]["Quantity"] += 1
+
+                # TO BIN
+                if to_bin_abs:
+                    line["StockTransferLinesBinAllocations"].append({
+                    "BinActionType": "batToWarehouse",
+                    "BinAbsEntry": to_bin_abs,
+                    "Quantity": 1.0,
+                    "AllowNegativeQuantity": "tNO",
+                    "BaseLineNumber": line["LineNum"],
+                    "SerialAndBatchNumbersBaseLine": serial_index
+                     })
+                if from_bin_abs :
+                # FROM BIN
+                    line["StockTransferLinesBinAllocations"].append({
+                    "BinActionType": "batFromWarehouse",
+                    "BinAbsEntry": from_bin_abs,
+                    "Quantity": 1.0,
+                    "AllowNegativeQuantity": "tNO",
+                    "BaseLineNumber": line["LineNum"],
+                    "SerialAndBatchNumbersBaseLine": serial_index
+                    })
+
+                line["Quantity"] += 1
 
         # Construct the multi-line SAP payload
         sap_payload = {
             "DocDate": datetime.now().strftime('%Y-%m-%d'),
-            "Comments": qc_notes or f"QC Approved WMS Transfer by {current_user.username}",
+            "Comments": qc_notes or "Approved",
             "FromWarehouse": transfer.from_warehouse,
             "ToWarehouse": transfer.to_warehouse,
-            #"BPLID": 5,  # Default branch, you may want to get this from transfer data
             "StockTransferLines": list(items_by_code.values())
         }
 
@@ -1063,10 +949,10 @@ def qc_approve_transfer(transfer_id):
         # Extract document number from SAP response
         sap_data = sap_result.get('data', {})
         doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
-        
+
         transfer.sap_document_number = str(doc_num)
         transfer.status = 'posted'
-        
+
         db.session.commit()
 
         logging.info(f"✅ Direct Inventory Transfer {transfer_id} approved by {current_user.username}")
@@ -1083,107 +969,108 @@ def qc_approve_transfer(transfer_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@direct_inventory_transfer_bp.route('/<int:transfer_id>/approve', methods=['POST'])
-@login_required
-def approve_transfer(transfer_id):
-    """Approve Direct Inventory Transfer and post to SAP B1 with multi-line support"""
-    try:
-        transfer = DirectInventoryTransfer.query.get_or_404(transfer_id)
-
-        if not current_user.has_permission('qc_dashboard') and current_user.role not in ['admin', 'manager']:
-            return jsonify({'success': False, 'error': 'QC permissions required'}), 403
-
-        if transfer.status != 'submitted':
-            return jsonify({'success': False, 'error': 'Only submitted transfers can be approved'}), 400
-
-        qc_notes = request.json.get('qc_notes', '') if request.is_json else request.form.get('qc_notes', '')
-
-        transfer.status = 'qc_approved'
-        transfer.qc_approver_id = current_user.id
-        transfer.qc_approved_at = datetime.utcnow()
-        transfer.qc_notes = qc_notes
-        transfer.updated_at = datetime.utcnow()
-
-        for item in transfer.items:
-            item.qc_status = 'approved'
-
-        # Prepare multi-line SAP payload
-        sap = SAPIntegration()
-        if not sap.ensure_logged_in():
-            db.session.rollback()
-            return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
-
-        # Group items by ItemCode to create proper transfer lines
-        items_by_code = {}
-        line_num = 0
-        
-        for item in transfer.items:
-            item_code = item.item_code
-            serial_numbers = json.loads(item.serial_numbers) if item.serial_numbers else []
-            
-            if item_code not in items_by_code:
-                items_by_code[item_code] = {
-                    "LineNum": line_num,
-                    "ItemCode": item_code,
-                    "Quantity": 0,
-                    "WarehouseCode": item.to_warehouse_code,
-                    "FromWarehouseCode": item.from_warehouse_code,
-                    "SerialNumbers": [],
-                    "BatchNumbers": [],
-                    "StockTransferLinesBinAllocations": []
-                }
-                line_num += 1
-            
-            # Add serial numbers and update quantity
-            for serial in serial_numbers:
-                items_by_code[item_code]["SerialNumbers"].append({
-                    "InternalSerialNumber": serial,
-                    "Quantity": 1
-                })
-                items_by_code[item_code]["Quantity"] += 1
-
-        # Construct the multi-line SAP payload
-        sap_payload = {
-            "DocDate": datetime.now().strftime('%Y-%m-%d'),
-            "Comments": qc_notes or f"QC Approved WMS Transfer by {current_user.username}",
-            "FromWarehouse": transfer.from_warehouse,
-            "ToWarehouse": transfer.to_warehouse,
-            "BPLID": 5,  # Default branch, you may want to get this from transfer data
-            "StockTransferLines": list(items_by_code.values())
-        }
-
-        logging.info(f"📤 Multi-line SAP payload for transfer {transfer_id}:")
-        logging.info(json.dumps(sap_payload, indent=2))
-
-        sap_result = sap.create_stock_transfer(sap_payload)
-
-        if not sap_result.get('success'):
-            db.session.rollback()
-            sap_error = sap_result.get('error', 'Unknown SAP error')
-            logging.error(f"❌ SAP B1 posting failed: {sap_error}")
-            return jsonify({'success': False, 'error': f'SAP B1 posting failed: {sap_error}'}), 500
-
-        # Extract document number from SAP response
-        sap_data = sap_result.get('data', {})
-        doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
-        
-        transfer.sap_document_number = str(doc_num)
-        transfer.status = 'posted'
-        
-        db.session.commit()
-
-        logging.info(f"✅ Multi-line Direct Inventory Transfer {transfer_id} approved and posted to SAP B1 as {transfer.sap_document_number}")
-        return jsonify({
-            'success': True,
-            'message': f'Multi-line transfer approved and posted to SAP B1 as {transfer.sap_document_number}',
-            'sap_document_number': transfer.sap_document_number,
-            'lines_count': len(items_by_code)
-        })
-
-    except Exception as e:
-        logging.error(f"Error approving multi-line transfer: {str(e)}")
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+# @direct_inventory_transfer_bp.route('/<int:transfer_id>/approve', methods=['POST'])
+# @login_required
+# def approve_transfer(transfer_id):
+#     """Approve Direct Inventory Transfer and post to SAP B1 with multi-line support"""
+#     try:
+#         print (" stock transfer -->>2")
+#         transfer = DirectInventoryTransfer.query.get_or_404(transfer_id)
+#
+#         if not current_user.has_permission('qc_dashboard') and current_user.role not in ['admin', 'manager']:
+#             return jsonify({'success': False, 'error': 'QC permissions required'}), 403
+#
+#         if transfer.status != 'submitted':
+#             return jsonify({'success': False, 'error': 'Only submitted transfers can be approved'}), 400
+#
+#         qc_notes = request.json.get('qc_notes', '') if request.is_json else request.form.get('qc_notes', '')
+#
+#         transfer.status = 'qc_approved'
+#         transfer.qc_approver_id = current_user.id
+#         transfer.qc_approved_at = datetime.utcnow()
+#         transfer.qc_notes = qc_notes
+#         transfer.updated_at = datetime.utcnow()
+#
+#         for item in transfer.items:
+#             item.qc_status = 'approved'
+#
+#         # Prepare multi-line SAP payload
+#         sap = SAPIntegration()
+#         if not sap.ensure_logged_in():
+#             db.session.rollback()
+#             return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
+#
+#         # Group items by ItemCode to create proper transfer lines
+#         items_by_code = {}
+#         line_num = 0
+#
+#         for item in transfer.items:
+#             item_code = item.item_code
+#             serial_numbers = json.loads(item.serial_numbers) if item.serial_numbers else []
+#
+#             if item_code not in items_by_code:
+#                 items_by_code[item_code] = {
+#                     "LineNum": line_num,
+#                     "ItemCode": item_code,
+#                     "Quantity": 0,
+#                     "WarehouseCode": item.to_warehouse_code,
+#                     "FromWarehouseCode": item.from_warehouse_code,
+#                     "SerialNumbers": [],
+#                     "BatchNumbers": [],
+#                     "StockTransferLinesBinAllocations": []
+#                 }
+#                 line_num += 1
+#
+#             # Add serial numbers and update quantity
+#             for serial in serial_numbers:
+#                 items_by_code[item_code]["SerialNumbers"].append({
+#                     "InternalSerialNumber": serial,
+#                     "Quantity": 1
+#                 })
+#                 items_by_code[item_code]["Quantity"] += 1
+#
+#         # Construct the multi-line SAP payload
+#         sap_payload = {
+#             "DocDate": datetime.now().strftime('%Y-%m-%d'),
+#             "Comments": qc_notes or f"QC Approved WMS Transfer by {current_user.username}",
+#             "FromWarehouse": transfer.from_warehouse,
+#             "ToWarehouse": transfer.to_warehouse,
+#             "BPLID": 5,  # Default branch, you may want to get this from transfer data
+#             "StockTransferLines": list(items_by_code.values())
+#         }
+#
+#         logging.info(f"📤 Multi-line SAP payload for transfer {transfer_id}:")
+#         logging.info(json.dumps(sap_payload, indent=2))
+#
+#         sap_result = sap.create_stock_transfer(sap_payload)
+#
+#         if not sap_result.get('success'):
+#             db.session.rollback()
+#             sap_error = sap_result.get('error', 'Unknown SAP error')
+#             logging.error(f"❌ SAP B1 posting failed: {sap_error}")
+#             return jsonify({'success': False, 'error': f'SAP B1 posting failed: {sap_error}'}), 500
+#
+#         # Extract document number from SAP response
+#         sap_data = sap_result.get('data', {})
+#         doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
+#
+#         transfer.sap_document_number = str(doc_num)
+#         transfer.status = 'posted'
+#
+#         db.session.commit()
+#
+#         logging.info(f"✅ Multi-line Direct Inventory Transfer {transfer_id} approved and posted to SAP B1 as {transfer.sap_document_number}")
+#         return jsonify({
+#             'success': True,
+#             'message': f'Multi-line transfer approved and posted to SAP B1 as {transfer.sap_document_number}',
+#             'sap_document_number': transfer.sap_document_number,
+#             'lines_count': len(items_by_code)
+#         })
+#
+#     except Exception as e:
+#         logging.error(f"Error approving multi-line transfer: {str(e)}")
+#         db.session.rollback()
+#         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @direct_inventory_transfer_bp.route('/<int:transfer_id>/reject', methods=['POST'])
@@ -1429,7 +1316,7 @@ def get_serial_location():
     """Get current location of a serial number"""
     try:
         serial_number = request.args.get('serial_number')
-        print("Inventory serial_number",serial_number)
+
         if not serial_number:
             return jsonify({'success': False, 'error': 'Serial number required'}), 400
         
@@ -1455,119 +1342,121 @@ def get_serial_location():
 
 
 
-@direct_inventory_transfer_bp.route('/api/post-stock-transfer', methods=['POST'])
-@login_required
-def post_stock_transfer():
-    """Post stock transfer directly to SAP B1 StockTransfers API"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'No data provided'}), 400
-        
-        # Validate required fields
-        required_fields = ['FromWarehouse', 'ToWarehouse', 'BPLID', 'StockTransferLines']
-        missing_fields = [field for field in required_fields if not data.get(field)]
-        
-        if missing_fields:
-            return jsonify({
-                'success': False,
-                'error': f'Missing required fields: {", ".join(missing_fields)}'
-            }), 400
-        
-        # Validate StockTransferLines
-        lines = data.get('StockTransferLines', [])
-        if not lines:
-            return jsonify({'success': False, 'error': 'No transfer lines provided'}), 400
-        
-        # Log the payload being sent
-        logging.info(f"📤 Posting Stock Transfer to SAP B1:")
-        logging.info(f"Payload: {json.dumps(data, indent=2)}")
-        
-        # Create transfer record in local database
-        transfer_number = generate_direct_transfer_number()
-        
-        transfer = DirectInventoryTransfer(
-            transfer_number=transfer_number,
-            user_id=current_user.id,
-            from_warehouse=data.get('FromWarehouse'),
-            to_warehouse=data.get('ToWarehouse'),
-            from_bin=data.get('from_bin_code', ''),
-            to_bin=data.get('to_bin_code', ''),
-            notes=data.get('Comments', ''),
-            status='draft'
-        )
-        
-        db.session.add(transfer)
-        db.session.flush()
-        
-        # Create transfer item for each line
-        for line in lines:
-            serial_numbers = line.get('SerialNumbers', [])
-            serial_numbers_json = json.dumps([sn.get('InternalSerialNumber') for sn in serial_numbers]) if serial_numbers else None
-            
-            transfer_item = DirectInventoryTransferItem(
-                direct_inventory_transfer_id=transfer.id,
-                item_code=line.get('ItemCode'),
-                item_description=line.get('ItemDescription', ''),
-                barcode=line.get('ItemCode'),
-                item_type='serial' if serial_numbers else 'none',
-                quantity=line.get('Quantity', 1),
-                from_warehouse_code=data.get('FromWarehouse'),
-                to_warehouse_code=data.get('ToWarehouse'),
-                from_bin_code=data.get('from_bin_code', ''),
-                to_bin_code=data.get('to_bin_code', ''),
-                serial_numbers=serial_numbers_json,
-                validation_status='validated',
-                qc_status='approved'
-            )
-            
-            db.session.add(transfer_item)
-        
-        # Post to SAP B1
-        sap = SAPIntegration()
-        if not sap.ensure_logged_in():
-            db.session.rollback()
-            return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
-        
-        # Send the exact payload to SAP B1
-        sap_result = sap.create_stock_transfer(data)
-        
-        if sap_result.get('success'):
-            # Extract document number from SAP response
-            sap_data = sap_result.get('data', {})
-            doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
-            
-            transfer.sap_document_number = str(doc_num)
-            transfer.status = 'posted'
-            
-            db.session.commit()
-            
-            logging.info(f"✅ Stock transfer posted to SAP B1: Document {doc_num}")
-            
-            return jsonify({
-                'success': True,
-                'transfer_number': transfer_number,
-                'sap_doc_number': doc_num,
-                'doc_num': doc_num,
-                'message': 'Stock transfer posted successfully to SAP B1'
-            })
-        else:
-            transfer.status = 'rejected'
-            transfer.notes = f"SAP Error: {sap_result.get('error')}"
-            db.session.commit()
-            
-            logging.error(f"❌ SAP B1 posting failed: {sap_result.get('error')}")
-            return jsonify({
-                'success': False,
-                'error': sap_result.get('error', 'Failed to post to SAP B1')
-            }), 500
-        
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error posting stock transfer: {str(e)}")
-        import traceback
-        logging.error(f"Full traceback: {traceback.format_exc()}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+# @direct_inventory_transfer_bp.route('/api/post-stock-transfer', methods=['POST'])
+# @login_required
+# def post_stock_transfer():
+#     """Post stock transfer directly to SAP B1 StockTransfers API"""
+#     try:
+#
+#         print("stocktransfer 3")
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({'success': False, 'error': 'No data provided'}), 400
+#
+#         # Validate required fields
+#         required_fields = ['FromWarehouse', 'ToWarehouse', 'BPLID', 'StockTransferLines']
+#         missing_fields = [field for field in required_fields if not data.get(field)]
+#
+#         if missing_fields:
+#             return jsonify({
+#                 'success': False,
+#                 'error': f'Missing required fields: {", ".join(missing_fields)}'
+#             }), 400
+#
+#         # Validate StockTransferLines
+#         lines = data.get('StockTransferLines', [])
+#         if not lines:
+#             return jsonify({'success': False, 'error': 'No transfer lines provided'}), 400
+#
+#         # Log the payload being sent
+#         logging.info(f"📤 Posting Stock Transfer to SAP B1:")
+#         logging.info(f"Payload: {json.dumps(data, indent=2)}")
+#
+#         # Create transfer record in local database
+#         transfer_number = generate_direct_transfer_number()
+#
+#         transfer = DirectInventoryTransfer(
+#             transfer_number=transfer_number,
+#             user_id=current_user.id,
+#             from_warehouse=data.get('FromWarehouse'),
+#             to_warehouse=data.get('ToWarehouse'),
+#             from_bin=data.get('from_bin_code', ''),
+#             to_bin=data.get('to_bin_code', ''),
+#             notes=data.get('Comments', ''),
+#             status='draft'
+#         )
+#
+#         db.session.add(transfer)
+#         db.session.flush()
+#
+#         # Create transfer item for each line
+#         for line in lines:
+#             serial_numbers = line.get('SerialNumbers', [])
+#             serial_numbers_json = json.dumps([sn.get('InternalSerialNumber') for sn in serial_numbers]) if serial_numbers else None
+#
+#             transfer_item = DirectInventoryTransferItem(
+#                 direct_inventory_transfer_id=transfer.id,
+#                 item_code=line.get('ItemCode'),
+#                 item_description=line.get('ItemDescription', ''),
+#                 barcode=line.get('ItemCode'),
+#                 item_type='serial' if serial_numbers else 'none',
+#                 quantity=line.get('Quantity', 1),
+#                 from_warehouse_code=data.get('FromWarehouse'),
+#                 to_warehouse_code=data.get('ToWarehouse'),
+#                 from_bin_code=data.get('from_bin_code', ''),
+#                 to_bin_code=data.get('to_bin_code', ''),
+#                 serial_numbers=serial_numbers_json,
+#                 validation_status='validated',
+#                 qc_status='approved'
+#             )
+#
+#             db.session.add(transfer_item)
+#
+#         # Post to SAP B1
+#         sap = SAPIntegration()
+#         if not sap.ensure_logged_in():
+#             db.session.rollback()
+#             return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
+#
+#         # Send the exact payload to SAP B1
+#         sap_result = sap.create_stock_transfer(data)
+#
+#         if sap_result.get('success'):
+#             # Extract document number from SAP response
+#             sap_data = sap_result.get('data', {})
+#             doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
+#
+#             transfer.sap_document_number = str(doc_num)
+#             transfer.status = 'posted'
+#
+#             db.session.commit()
+#
+#             logging.info(f"✅ Stock transfer posted to SAP B1: Document {doc_num}")
+#
+#             return jsonify({
+#                 'success': True,
+#                 'transfer_number': transfer_number,
+#                 'sap_doc_number': doc_num,
+#                 'doc_num': doc_num,
+#                 'message': 'Stock transfer posted successfully to SAP B1'
+#             })
+#         else:
+#             transfer.status = 'rejected'
+#             transfer.notes = f"SAP Error: {sap_result.get('error')}"
+#             db.session.commit()
+#
+#             logging.error(f"❌ SAP B1 posting failed: {sap_result.get('error')}")
+#             return jsonify({
+#                 'success': False,
+#                 'error': sap_result.get('error', 'Failed to post to SAP B1')
+#             }), 500
+#
+#     except Exception as e:
+#         db.session.rollback()
+#         logging.error(f"Error posting stock transfer: {str(e)}")
+#         import traceback
+#         logging.error(f"Full traceback: {traceback.format_exc()}")
+#         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @direct_inventory_transfer_bp.route('/api/post-serial-stock-transfer', methods=['POST'])
@@ -1575,23 +1464,24 @@ def post_stock_transfer():
 def post_serial_stock_transfer():
     """Post a serial-based stock transfer to SAP B1"""
     try:
+
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
-        
+
         # Validate required fields
         required_fields = ['from_warehouse', 'to_warehouse', 'item_code', 'serial_number', 'branch_id']
         missing_fields = [field for field in required_fields if not data.get(field)]
-        
+
         if missing_fields:
             return jsonify({
                 'success': False,
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
             }), 400
-        
+
         # Create transfer record
         transfer_number = generate_direct_transfer_number()
-        
+
         transfer = DirectInventoryTransfer(
             transfer_number=transfer_number,
             user_id=current_user.id,
@@ -1602,10 +1492,10 @@ def post_serial_stock_transfer():
             notes=data.get('comments', f'Serial-based transfer for {data.get("serial_number")}'),
             status='draft'
         )
-        
+
         db.session.add(transfer)
         db.session.flush()
-        
+
         # Create transfer item
         transfer_item = DirectInventoryTransferItem(
             direct_inventory_transfer_id=transfer.id,
@@ -1622,15 +1512,15 @@ def post_serial_stock_transfer():
             validation_status='validated',
             qc_status='approved'  # Auto-approve for serial transfers
         )
-        
+
         db.session.add(transfer_item)
-        
+
         # Post to SAP B1
         sap = SAPIntegration()
         if not sap.ensure_logged_in():
             db.session.rollback()
             return jsonify({'success': False, 'error': 'SAP B1 authentication failed'}), 500
-        
+
         # Prepare SAP payload according to the specification
         sap_payload = {
             "DocDate": datetime.now().strftime('%Y-%m-%d'),
@@ -1656,22 +1546,22 @@ def post_serial_stock_transfer():
                 }
             ]
         }
-        
+
         sap_result = sap.create_stock_transfer(sap_payload)
-        
+
         if sap_result.get('success'):
             # Extract document number from SAP response
             sap_data = sap_result.get('data', {})
             doc_num = sap_data.get('DocNum') or sap_data.get('DocEntry', '')
-            
+
             transfer.sap_document_number = str(doc_num)
             transfer.status = 'posted'
             transfer_item.qc_status = 'approved'
-            
+
             db.session.commit()
-            
+
             logging.info(f"✅ Serial-based transfer posted to SAP: {doc_num}")
-            
+
             return jsonify({
                 'success': True,
                 'transfer_number': transfer_number,
@@ -1682,12 +1572,12 @@ def post_serial_stock_transfer():
             transfer.status = 'rejected'
             transfer.notes = f"SAP Error: {sap_result.get('error')}"
             db.session.commit()
-            
+
             return jsonify({
                 'success': False,
                 'error': sap_result.get('error', 'Failed to post to SAP B1')
             }), 500
-        
+
     except Exception as e:
         db.session.rollback()
         logging.error(f"Error posting serial stock transfer: {str(e)}")
