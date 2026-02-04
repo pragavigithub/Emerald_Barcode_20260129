@@ -145,6 +145,29 @@
                                     <input class="form-check-input" type="checkbox" id="bin_scanning" name="bin_scanning" {{ 'checked' if user.has_permission('bin_scanning') else '' }}>
                                     <label class="form-check-label" for="bin_scanning">Bin Tracking</label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="grpo_transfer" name="grpo_transfer" {{ 'checked' if user.has_permission('grpo_transfer') else '' }}>
+                                    <label class="form-check-label" for="grpo_transfer">GRPO Transfer</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Warehouse Assignment Section -->
+                    <div class="mb-4">
+                        <h6>GRPO Transfer Warehouse Assignment</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Approved Warehouse</label>
+                                <input type="text" class="form-control mb-2" name="approved_warehouse" value="{{ user.approved_warehouse or '' }}" placeholder="Approved WH">
+                                <label class="form-label">Approved Bin</label>
+                                <input type="text" class="form-control" name="approved_bin" value="{{ user.approved_bin or '' }}" placeholder="Approved Bin">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rejected Warehouse</label>
+                                <input type="text" class="form-control mb-2" name="rejected_warehouse" value="{{ user.rejected_warehouse or '' }}" placeholder="Rejected WH">
+                                <label class="form-label">Rejected Bin</label>
+                                <input type="text" class="form-control" name="rejected_bin" value="{{ user.rejected_bin or '' }}" placeholder="Rejected Bin">
                             </div>
                         </div>
                     </div>

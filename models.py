@@ -26,6 +26,10 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime, nullable=True)
     permissions = db.Column(db.Text,
                          nullable=True)  # JSON string of screen permissions
+    approved_warehouse = db.Column(db.String(50), nullable=True)
+    approved_bin = db.Column(db.String(50), nullable=True)
+    rejected_warehouse = db.Column(db.String(50), nullable=True)
+    rejected_bin = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime,
                         default=datetime.utcnow,
@@ -65,7 +69,8 @@ class User(UserMixin, db.Model):
             'qc_dashboard': False,
             'multiple_grn': False,
             'so_against_invoice': False,
-            'item_tracking': False
+            'item_tracking': False,
+            'grpo_transfer': False
         }
 
         if self.role == 'admin':

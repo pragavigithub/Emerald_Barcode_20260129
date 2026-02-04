@@ -5118,10 +5118,17 @@ def edit_user(user_id):
         permissions = {}
         for screen in ['dashboard', 'grpo', 'inventory_transfer', 'serial_transfer', 'serial_item_transfer', 'batch_transfer',
                        'direct_inventory_transfer', 'sales_delivery', 'pick_list', 'inventory_counting', 
-                       'bin_scanning', 'label_printing', 'user_management', 'qc_dashboard', 'multiple_grn', 'so_against_invoice','item_tracking']:
+                       'bin_scanning', 'label_printing', 'user_management', 'qc_dashboard', 'multiple_grn', 'so_against_invoice','item_tracking', 'grpo_transfer']:
             permissions[screen] = screen in request.form
         
         user.set_permissions(permissions)
+        
+        # Update Warehouse/Bin assignments
+        user.approved_warehouse = request.form.get('approved_warehouse')
+        user.approved_bin = request.form.get('approved_bin')
+        user.rejected_warehouse = request.form.get('rejected_warehouse')
+        user.rejected_bin = request.form.get('rejected_bin')
+
         user.updated_at = datetime.utcnow()
         
         db.session.commit()
