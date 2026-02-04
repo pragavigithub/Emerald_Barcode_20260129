@@ -1383,74 +1383,11 @@ def get_bin_codes_with_entry(warehouse_code):
 # ============================================================================
 # STEP 8.5: Get Item Details
 # ============================================================================
-@login_required
-def get_item_details(item_id):
-    """Get single item details"""
-    try:
-        item = GRPOTransferItem.query.get(item_id)
-        if not item:
-            return jsonify({
-                'success': False,
-                'error': 'Item not found'
-            }), 404
-        
-        # Get batch info if batch item
-        batches = []
-        for batch in item.batches:
-            batches.append({
-                'id': batch.id,
-                'batch_number': batch.batch_number,
-                'batch_quantity': batch.batch_quantity,
-                'approved_quantity': batch.approved_quantity,
-                'rejected_quantity': batch.rejected_quantity,
-                'expiry_date': batch.expiry_date.isoformat() if batch.expiry_date else None,
-                'manufacture_date': batch.manufacture_date.isoformat() if batch.manufacture_date else None,
-                'qc_status': batch.qc_status
-            })
-        
-        return jsonify({
-            'success': True,
-            'item': {
-                'id': item.id,
-                'item_code': item.item_code,
-                'item_name': item.item_name,
-                'item_description': item.item_description,
-                'is_batch_item': item.is_batch_item,
-                'is_serial_item': item.is_serial_item,
-                'is_non_managed': item.is_non_managed,
-                'received_quantity': item.received_quantity,
-                'approved_quantity': item.approved_quantity,
-                'rejected_quantity': item.rejected_quantity,
-                'from_warehouse': item.from_warehouse,
-                'from_bin_code': item.from_bin_code,
-                'to_warehouse': item.to_warehouse,
-                'to_bin_code': item.to_bin_code,
-                'unit_of_measure': item.unit_of_measure,
-                'price': item.price,
-                'line_total': item.line_total,
-                'qc_status': item.qc_status,
-                'qc_notes': item.qc_notes,
-                'sap_base_entry': item.sap_base_entry,
-                'sap_base_line': item.sap_base_line,
-                'batches': batches
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error fetching item: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-# ============================================================================
-# STEP 8.5: Get Item Details
-# ============================================================================
 
 @grpo_transfer_bp.route('/api/item/<int:item_id>', methods=['GET'])
 @login_required
 def get_item_details(item_id):
-    """Get item details for editing"""
+    """Get item details for editing with user defaults"""
     try:
         item = GRPOTransferItem.query.get(item_id)
         if not item:
@@ -1473,6 +1410,12 @@ def get_item_details(item_id):
                     'manufacture_date': batch.manufacture_date.isoformat() if batch.manufacture_date else None
                 })
         
+        # Get user defaults if item values are not set
+        approved_wh = item.approved_to_warehouse or current_user.approved_warehouse
+        approved_bin = item.approved_to_bin_code or current_user.approved_bin
+        rejected_wh = item.rejected_to_warehouse or current_user.rejected_warehouse
+        rejected_bin = item.rejected_to_bin_code or current_user.rejected_bin
+
         return jsonify({
             'success': True,
             'item': {
@@ -1490,16 +1433,22 @@ def get_item_details(item_id):
                 'from_bin_code': item.from_bin_code,
                 'to_warehouse': item.to_warehouse,
                 'to_bin_code': item.to_bin_code,
-                'approved_to_warehouse': item.approved_to_warehouse,
-                'approved_to_bin_code': item.approved_to_bin_code,
-                'rejected_to_warehouse': item.rejected_to_warehouse,
-                'rejected_to_bin_code': item.rejected_to_bin_code,
+                'approved_to_warehouse': approved_wh,
+                'approved_to_bin_code': approved_bin,
+                'rejected_to_warehouse': rejected_wh,
+                'rejected_to_bin_code': rejected_bin,
                 'unit_of_measure': item.unit_of_measure,
                 'price': item.price,
                 'line_total': item.line_total,
                 'qc_status': item.qc_status,
                 'qc_notes': item.qc_notes,
                 'batches': batches_data
+            },
+            'user_defaults': {
+                'approved_warehouse': current_user.approved_warehouse,
+                'approved_bin': current_user.approved_bin,
+                'rejected_warehouse': current_user.rejected_warehouse,
+                'rejected_bin': current_user.rejected_bin
             }
         })
         
