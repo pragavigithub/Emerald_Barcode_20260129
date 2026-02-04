@@ -126,6 +126,31 @@ class SAPQueryManager:
                 "SqlCode": "item_tracking",
                 "SqlName": "item_tracking",
                 "SqlText": "SELECT Distinct T0.[ItemCode], T1.[DistNumber] AS [SerialNumber],T0.[DocDate],T0.[DocEntry], T0.[DocNum], T0.[DocType], T0.[CardCode], T0.[CardName], T4.[WhsCode], T1.[AbsEntry] AS [SerialAbsEntry],T3.[ReleaseQty],T3.[Quantity] FROM [OITL] T0 INNER JOIN [ITL1] T3 ON T0.[LogEntry] = T3.[LogEntry] INNER JOIN [OSRN] T1 ON T3.[MdAbsEntry] = T1.[AbsEntry] LEFT JOIN [OBTQ] T4 ON T3.[MdAbsEntry] = T4.[MdAbsEntry] WHERE T1.[DistNumber] = :serialNumber ORDER BY T0.[DocDate], T0.[DocEntry]"
+            },
+            {
+                "SqlCode": "get_serial_current_location",
+                "SqlName": "get_serial_current_location",
+                "SqlText": "SELECT T0.[ItemCode], T0.[itemName], T0.[DistNumber], T2.[WhsCode], T2.[WhsName], T3.[BPLName], T2.[BPLid], B.[BinAbs] AS [BinAbsEntry] FROM [OSRN] T0 INNER JOIN [OSRQ] T1 ON T0.[AbsEntry] = T1.[MdAbsEntry] INNER JOIN [OWHS] T2 ON T2.[WhsCode] = T1.[WhsCode] INNER JOIN [OBPL] T3 ON T3.[BPLId] = T2.[BPLid] LEFT JOIN [OBBQ] B ON B.[SnBMDAbs] = T0.[AbsEntry] AND B.[WhsCode] = T1.[WhsCode] WHERE T1.[Quantity] > 0 AND T0.[DistNumber] = :serial_number"
+            },
+            {
+                "SqlCode": "GET_GRPO_DocEntry_By_Series",
+                "SqlName": "GET_GRPO_DocEntry_By_Series",
+                "SqlText": "SELECT DISTINCT T1.[DocNum],T1.[CardName],T1.[DocStatus],T1.[DocEntry] FROM [OPDN] T1 WHERE T1.[DocStatus] = 'O' AND T1.[Series] =:seriesID"
+            },
+            {
+                "SqlCode": "Get_Batches_By_DocEntry",
+                "SqlName": "Get_Batches_By_DocEntry",
+                "SqlText": "SELECT T0.[DocEntry],T1.[LineNum],T1.[ItemCode],T2.[BatchNum],T2.[Quantity],T3.[ExpDate], T3.[MnfDate] FROM [OPDN] T0 INNER JOIN [PDN1] T1 ON T0.[DocEntry] = T1.[DocEntry] INNER JOIN [IBT1] T2 ON T2.[BaseType] = '20'  AND T2.[BaseEntry]  = T0.[DocEntry] AND T2.[BaseLinNum] = T1.[LineNum] AND T2.[ItemCode]   = T1.[ItemCode] INNER JOIN [OBTN] T3 ON T3.[ItemCode] = T2.[ItemCode] AND T3.[DistNumber] = T2.[BatchNum] WHERE T0.[DocEntry] = :docEntry"
+            },
+            {
+                "SqlCode": "Get_Batch_By_DocEntry_ItemCode",
+                "SqlName": "Get_Batch_By_DocEntry_ItemCode",
+                "SqlText": "SELECT T0.[DocEntry],T1.[LineNum],T1.[ItemCode],T2.[BatchNum],T2.[Quantity],T3.[ExpDate], T3.[MnfDate] FROM [OPDN] T0 INNER JOIN [PDN1] T1 ON T0.[DocEntry] = T1.[DocEntry] INNER JOIN [IBT1] T2 ON T2.[BaseType] = '20' AND T2.[BaseEntry]  = T0.[DocEntry] AND T2.[BaseLinNum] = T1.[LineNum] AND T2.[ItemCode]   = T1.[ItemCode] INNER JOIN [OBTN] T3 ON T3.[ItemCode] = T2.[ItemCode] AND T3.[DistNumber] = T2.[BatchNum] WHERE T0.[DocEntry] = :docEntry AND T1.[ItemCode] =:itemCode AND T1.[LineNum] =:lineNum"
+            },
+            {
+                "SqlCode": "GET_GRPO_Series",
+                "SqlName": "GET_GRPO_Series",
+                "SqlText": "SELECT DISTINCT T1.Series AS SeriesID,T1.SeriesName FROM OPDN T0 INNER JOIN NNM1 T1 ON T0.Series = T1.Series"
             }
         ]
     

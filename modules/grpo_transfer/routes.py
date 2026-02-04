@@ -2450,7 +2450,16 @@ def post_transfer_to_sap(session_id):
                 for batch in item.batches:
                     if batch.approved_quantity <= 0:
                         continue
-                    
+                    from_bin_abs = sap.get_bin_abs_entry(item.from_bin_code,
+                                                         item.from_warehouse
+                                                         )
+                    print ("from_bin_abs-->",from_bin_abs)
+
+                    to_bin_abs = sap.get_bin_abs_entry(item.approved_to_bin_code,
+                                                       item.approved_to_warehouse
+                                                       )
+
+                    print("to_bin_absto_bin_abs->",to_bin_abs)
                     line = {
                         'LineNum': line_num,
                         'ItemCode': item.item_code,
@@ -2471,18 +2480,18 @@ def post_transfer_to_sap(session_id):
                     }
 
                     # Add bin allocations if available
-                    if item.from_bin_code and item.from_bin_abs_entry:
+                    if from_bin_abs:
                         line['StockTransferLinesBinAllocations'].append({
                             'BinActionType': 'batFromWarehouse',
-                            'BinAbsEntry': item.from_bin_abs_entry,
+                            'BinAbsEntry': from_bin_abs,
                             'Quantity': batch.approved_quantity,
                             'SerialAndBatchNumbersBaseLine': 0
                         })
                     
-                    if item.to_bin_code and item.to_bin_abs_entry:
+                    if to_bin_abs:
                         line['StockTransferLinesBinAllocations'].append({
                             'BinActionType': 'batToWarehouse',
-                            'BinAbsEntry': item.to_bin_abs_entry,
+                            'BinAbsEntry': to_bin_abs,
                             'Quantity': batch.approved_quantity,
                             'SerialAndBatchNumbersBaseLine': 0
                         })
@@ -2491,6 +2500,13 @@ def post_transfer_to_sap(session_id):
                     line_num += 1
             else:
                 # Non-batch items - NO batch numbers
+                from_bin_abs = sap.get_bin_abs_entry(item.from_bin_code,
+                                                     item.from_warehouse
+                                                     )
+
+                to_bin_abs = sap.get_bin_abs_entry(item.approved_to_bin_code,
+                                                       item.approved_to_warehouse
+                                                       )
                 line = {
                     'LineNum': line_num,
                     'ItemCode': item.item_code,
@@ -2505,18 +2521,18 @@ def post_transfer_to_sap(session_id):
                 }
                 
                 # Add bin allocations if available
-                if item.from_bin_code and item.from_bin_abs_entry:
+                if from_bin_abs:
                     line['StockTransferLinesBinAllocations'].append({
                         'BinActionType': 'batFromWarehouse',
-                        'BinAbsEntry': item.from_bin_abs_entry,
+                        'BinAbsEntry': from_bin_abs,
                         'Quantity': item.approved_quantity,
                         'SerialAndBatchNumbersBaseLine': 0
                     })
                 
-                if item.to_bin_code and item.to_bin_abs_entry:
+                if to_bin_abs:
                     line['StockTransferLinesBinAllocations'].append({
                         'BinActionType': 'batToWarehouse',
-                        'BinAbsEntry': item.to_bin_abs_entry,
+                        'BinAbsEntry': to_bin_abs,
                         'Quantity': item.approved_quantity,
                         'SerialAndBatchNumbersBaseLine': 0
                     })
@@ -2573,7 +2589,13 @@ def post_transfer_to_sap(session_id):
                 for batch in item.batches:
                     if batch.rejected_quantity <= 0:
                         continue
-                    
+                    from_bin_abs = sap.get_bin_abs_entry(item.from_bin_code,
+                                                         item.from_warehouse
+                                                         )
+
+                    to_bin_abs = sap.get_bin_abs_entry(item.rejected_to_bin_code,
+                                                       item.rejected_to_warehouse
+                                                       )
                     line = {
                         'LineNum': line_num,
                         'ItemCode': item.item_code,
@@ -2593,18 +2615,18 @@ def post_transfer_to_sap(session_id):
                     }
                     
                     # Add bin allocations if available
-                    if item.from_bin_code and item.from_bin_abs_entry:
+                    if from_bin_abs:
                         line['StockTransferLinesBinAllocations'].append({
                             'BinActionType': 'batFromWarehouse',
-                            'BinAbsEntry': item.from_bin_abs_entry,
+                            'BinAbsEntry': from_bin_abs,
                             'Quantity': batch.rejected_quantity,
                             'SerialAndBatchNumbersBaseLine': 0
                         })
                     
-                    if item.to_bin_code and item.to_bin_abs_entry:
+                    if to_bin_abs:
                         line['StockTransferLinesBinAllocations'].append({
                             'BinActionType': 'batToWarehouse',
-                            'BinAbsEntry': item.rejected_to_bin_abs_entry,
+                            'BinAbsEntry': to_bin_abs,
                             'Quantity': batch.rejected_quantity,
                             'SerialAndBatchNumbersBaseLine': 0
                         })
@@ -2613,6 +2635,13 @@ def post_transfer_to_sap(session_id):
                     line_num += 1
             else:
                 # Non-batch items - NO batch numbers
+                from_bin_abs = sap.get_bin_abs_entry(item.from_bin_code,
+                                                     item.from_warehouse
+                                                     )
+
+                to_bin_abs = sap.get_bin_abs_entry(item.rejected_to_bin_code,
+                                                   item.rejected_to_warehouse
+                                                   )
                 line = {
                     'LineNum': line_num,
                     'ItemCode': item.item_code,
@@ -2627,18 +2656,18 @@ def post_transfer_to_sap(session_id):
                 }
                 
                 # Add bin allocations if available
-                if item.from_bin_code and item.from_bin_abs_entry:
+                if from_bin_abs:
                     line['StockTransferLinesBinAllocations'].append({
                         'BinActionType': 'batFromWarehouse',
-                        'BinAbsEntry': item.from_bin_abs_entry,
+                        'BinAbsEntry': from_bin_abs,
                         'Quantity': item.rejected_quantity,
                         'SerialAndBatchNumbersBaseLine': 0
                     })
                 
-                if item.to_bin_code and item.to_bin_abs_entry:
+                if to_bin_abs:
                     line['StockTransferLinesBinAllocations'].append({
                         'BinActionType': 'batToWarehouse',
-                        'BinAbsEntry': item.rejected_to_bin_abs_entry,
+                        'BinAbsEntry': to_bin_abs,
                         'Quantity': item.rejected_quantity,
                         'SerialAndBatchNumbersBaseLine': 0
                     })
