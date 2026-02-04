@@ -51,8 +51,8 @@ def session_detail(session_id):
                     'batch_quantity': batch.batch_quantity,
                     'approved_quantity': batch.approved_quantity,
                     'rejected_quantity': batch.rejected_quantity,
-                    'expiry_date': batch.expiry_date,
-                    'manufacture_date': batch.manufacture_date,
+                    'expiry_date': batch.expiry_date.strftime('%Y-%m-%d') if batch.expiry_date else None,
+                    'manufacture_date': batch.manufacture_date.strftime('%Y-%m-%d') if batch.manufacture_date else None,
                     'qc_status': batch.qc_status
                 })
         
@@ -71,6 +71,8 @@ def session_detail(session_id):
             'from_bin_code': item.from_bin_code,
             'to_warehouse': item.to_warehouse,
             'to_bin_code': item.to_bin_code,
+            'rejected_to_warehouse': item.rejected_to_warehouse,
+            'rejected_to_bin_code': item.rejected_to_bin_code,
             'unit_of_measure': item.unit_of_measure,
             'price': item.price,
             'line_total': item.line_total,

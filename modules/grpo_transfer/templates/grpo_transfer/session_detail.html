@@ -389,8 +389,118 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// QC Items are loaded dynamically from the form
-// Warehouse dropdowns are populated in edit modal only
+function buildQCForm() {
+    const container = document.getElementById('qcItemsContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Get items from the items_json variable passed from backend
+    const items = {{ items_json|tojson }};
+    
+    // Use current user's default warehouses if available
+    const userDefaults = {
+        approved_warehouse: "{{ current_user.approved_warehouse or '' }}",
+        approved_bin: "{{ current_user.approved_bin or '' }}",
+        rejected_warehouse: "{{ current_user.rejected_warehouse or '' }}",
+        rejected_bin: "{{ current_user.rejected_bin or '' }}"
+    };
+
+    items.forEach(item => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'card mb-3';
+        
+        // Determine initial values for approved/rejected warehouse and bin
+        // Use database fields to_warehouse and to_bin_code for approved quantity
+        const initialApprovedWh = item.to_warehouse || userDefaults.approved_warehouse;
+        const initialApprovedBin = item.to_bin_code || userDefaults.approved_bin;
+        const initialRejectedWh = item.rejected_to_warehouse || userDefaults.rejected_warehouse;
+        const initialRejectedBin = item.rejected_to_bin_code || userDefaults.rejected_bin;
+
+        itemCard.innerHTML = `
+            <div class="card-header">
+                <h6 class="mb-0">${item.item_code} - ${item.item_name}</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Received Qty</label>
+                        <input type="text" class="form-control" value="${item.received_quantity}" disabled>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Approved Qty</label>
+                        <input type="number" class="form-control" name="approved_qty_${item.id}" value="${item.approved_quantity || 0}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rejected Qty</label>
+                        <input type="number" class="form-control" name="rejected_qty_${item.id}" value="${item.rejected_quantity || 0}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status_${item.id}">
+                            <option value="pending" ${item.qc_status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="approved" ${item.qc_status === 'approved' ? 'selected' : ''}>Approved</option>
+                            <option value="rejected" ${item.qc_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                            <option value="partial" ${item.qc_status === 'partial' ? 'selected' : ''}>Partial</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-success">Approved Qty Designation WH</label>
+                        <select class="form-select" name="to_warehouse_${item.id}" data-initial-value="${initialApprovedWh}">
+                            <option value="">-- Select Warehouse --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-success">Approved Qty Designation Bin</label>
+                        <select class="form-select" name="to_bin_${item.id}" data-initial-value="${initialApprovedBin}">
+                            <option value="">-- Select Bin --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-danger">Rejected Qty Designation WH</label>
+                        <select class="form-select" name="rejected_warehouse_${item.id}" data-initial-value="${initialRejectedWh}">
+                            <option value="">-- Select Warehouse --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-danger">Rejected Qty Designation Bin</label>
+                        <select class="form-select" name="rejected_bin_${item.id}" data-initial-value="${initialRejectedBin}">
+                            <option value="">-- Select Bin --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3" style="display:none;">
+                     <div class="col-md-6">
+                        <label class="form-label">From Warehouse</label>
+                        <select class="form-select" name="from_warehouse_${item.id}" data-initial-value="${item.from_warehouse || ''}">
+                            <option value="">-- Select Warehouse --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">From Bin Code</label>
+                        <select class="form-select" name="from_bin_${item.id}" data-initial-value="${item.from_bin_code || ''}">
+                            <option value="">-- Select Bin --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <label class="form-label">QC Notes</label>
+                        <textarea class="form-control" name="notes_${item.id}" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(itemCard);
+    });
+
+    // Load warehouses for all warehouse dropdowns
+    loadWarehousesForQC();
+}
 
 function editItem(itemId) {
     const modalElement = document.getElementById('itemEditModal');
@@ -406,9 +516,9 @@ function editItem(itemId) {
                 const item = data.item;
                 const userDefaults = data.user_defaults || {};
                 
-                // Determine initial values: item value OR user default
-                const initialApprovedWh = item.approved_to_warehouse || userDefaults.approved_warehouse || '';
-                const initialApprovedBin = item.approved_to_bin_code || userDefaults.approved_bin || '';
+                // Use user defaults if item specific values are not set
+                const initialApprovedWh = item.to_warehouse || userDefaults.approved_warehouse || '';
+                const initialApprovedBin = item.to_bin_code || userDefaults.approved_bin || '';
                 const initialRejectedWh = item.rejected_to_warehouse || userDefaults.rejected_warehouse || '';
                 const initialRejectedBin = item.rejected_to_bin_code || userDefaults.rejected_bin || '';
 
@@ -1448,27 +1558,177 @@ let currentEditItemId = null;
 let warehousesList = [];
 
 function editItem(itemId) {
-    currentEditItemId = itemId;
-
-    // Show loading in modal
-    document.getElementById('itemEditContent').innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading item data...</p></div>';
-
-    const modal = new bootstrap.Modal(document.getElementById('itemEditModal'));
+    const modalElement = document.getElementById('itemEditModal');
+    const modal = new bootstrap.Modal(modalElement);
+    const content = document.getElementById('itemEditContent');
+    content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading item details...</p></div>';
     modal.show();
 
-    // Fetch item data from API
     fetch(`/grpo-transfer/api/item/${itemId}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                renderItemEditForm(data.item);
+                const item = data.item;
+                const userDefaults = data.user_defaults || {};
+                
+                // Use user defaults if item specific values are not set
+                // item.to_warehouse and item.to_bin_code are the correct fields for approved quantity
+                const initialApprovedWh = item.to_warehouse || userDefaults.approved_warehouse || '';
+                const initialApprovedBin = item.to_bin_code || userDefaults.approved_bin || '';
+                const initialRejectedWh = item.rejected_to_warehouse || userDefaults.rejected_warehouse || '';
+                const initialRejectedBin = item.rejected_to_bin_code || userDefaults.rejected_bin || '';
+
+                let html = `
+                    <form id="itemEditForm">
+                        <input type="hidden" name="item_id" value="${item.id}">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Item Code</label>
+                                <input type="text" class="form-control" value="${item.item_code}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Item Name</label>
+                                <input type="text" class="form-control" value="${item.item_name}" disabled>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Received Qty</label>
+                                <input type="number" class="form-control" value="${item.received_quantity}" disabled>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Approved Qty</label>
+                                <input type="number" class="form-control" name="approved_qty" value="${item.approved_quantity || 0}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Rejected Qty</label>
+                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="qc_status">
+                                    <option value="pending" ${item.qc_status === 'pending' ? 'selected' : ''}>Pending</option>
+                                    <option value="approved" ${item.qc_status === 'approved' ? 'selected' : ''}>Approved</option>
+                                    <option value="rejected" ${item.qc_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                    <option value="partial" ${item.qc_status === 'partial' ? 'selected' : ''}>Partial</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">From Warehouse</label>
+                                <select class="form-select" name="from_warehouse" data-initial-value="${item.from_warehouse || ''}">
+                                    <option value="">-- Select Warehouse --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">From Bin Code</label>
+                                <select class="form-select" name="from_bin" data-initial-value="${item.from_bin_code || ''}">
+                                    <option value="">-- Select Bin --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="mb-3 text-success"><i data-feather="check-circle"></i> Approved Qty Designation WH</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">To Warehouse</label>
+                                <select class="form-select" name="to_warehouse" data-initial-value="${initialApprovedWh}">
+                                    <option value="">-- Select Warehouse --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">To Bin Code</label>
+                                <select class="form-select" name="to_bin" data-initial-value="${initialApprovedBin}">
+                                    <option value="">-- Select Bin --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <h6 class="mb-3 text-danger"><i data-feather="x-circle"></i> Rejected Qty Designation WH</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">To Warehouse</label>
+                                <select class="form-select" name="rejected_to_warehouse" data-initial-value="${initialRejectedWh}">
+                                    <option value="">-- Select Warehouse --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">To Bin Code</label>
+                                <select class="form-select" name="rejected_to_bin" data-initial-value="${initialRejectedBin}">
+                                    <option value="">-- Select Bin --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <hr>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">QC Notes</label>
+                                <textarea class="form-control" name="qc_notes" rows="2">${item.qc_notes || ''}</textarea>
+                            </div>
+                        </div>
+                `;
+
+                if (item.is_batch_item && item.batches && item.batches.length > 0) {
+                    html += `
+                        <h6 class="mt-4 mb-3">Batch Quantities</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Batch Number</th>
+                                        <th>Received</th>
+                                        <th>Approved</th>
+                                        <th>Rejected</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    item.batches.forEach(batch => {
+                        html += `
+                            <tr>
+                                <td>${batch.batch_number}</td>
+                                <td>${batch.batch_quantity}</td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm" name="batch_approved_${batch.id}" value="${batch.approved_quantity}">
+                                </td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm" name="batch_rejected_${batch.id}" value="${batch.rejected_quantity}">
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" name="batch_status_${batch.id}">
+                                        <option value="pending" ${batch.qc_status === 'pending' ? 'selected' : ''}>Pending</option>
+                                        <option value="approved" ${batch.qc_status === 'approved' ? 'selected' : ''}>Approved</option>
+                                        <option value="rejected" ${batch.qc_status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+
+                html += `</form>`;
+                content.innerHTML = html;
+                
+                // Initialize Feather icons in modal
+                if (window.feather) window.feather.replace();
+
+                // Load warehouses for modal dropdowns
+                loadModalWarehouses();
             } else {
-                document.getElementById('itemEditContent').innerHTML = `<div class="alert alert-danger">Error loading item: ${data.error}</div>`;
+                content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('itemEditContent').innerHTML = `<div class="alert alert-danger">Error loading item data</div>`;
         });
 }
 
@@ -1613,168 +1873,153 @@ function renderItemEditForm(item) {
     });
 }
 
-function loadWarehousesForEditBoth(fromWarehouse, toWarehouse, fromBin, toBin, rejectedToWarehouse, rejectedToBin) {
-    // Load warehouses for from, approved-to, and rejected-to warehouse dropdowns
-    const fromSelect = document.getElementById('editFromWarehouse');
-    const toSelect = document.getElementById('editToWarehouse');
-    const rejectedToSelect = document.getElementById('editToWarehouses');
+function loadModalWarehouses() {
+    const warehouseSelects = document.querySelectorAll('#itemEditForm select[name$="warehouse"]');
     
     fetch('/grpo-transfer/api/warehouses')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            if (data.success && data.warehouses) {
-                // Populate all warehouse dropdowns
-                fromSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
-                toSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
-                rejectedToSelect.innerHTML = '<option value="">-- Select Warehouse --</option>';
-
-                data.warehouses.forEach(wh => {
-                    // From warehouse option
-                    const fromOption = document.createElement('option');
-                    fromOption.value = wh.WarehouseCode;
-                    fromOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
-                    if (wh.WarehouseCode === fromWarehouse) {
-                        fromOption.selected = true;
+            if (data.success) {
+                warehouseSelects.forEach(select => {
+                    const initialValue = select.dataset.initialValue;
+                    select.innerHTML = '<option value="">-- Select Warehouse --</option>';
+                    data.warehouses.forEach(wh => {
+                        const option = document.createElement('option');
+                        option.value = wh.WarehouseCode;
+                        option.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                        if (wh.WarehouseCode === initialValue) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    
+                    // Trigger bin load if initial value exists
+                    if (initialValue) {
+                        const binSelectName = select.name.replace('warehouse', 'bin');
+                        const binSelect = document.querySelector(`#itemEditForm select[name="${binSelectName}"]`);
+                        if (binSelect) {
+                            loadModalBins(initialValue, binSelect, binSelect.dataset.initialValue);
+                        }
                     }
-                    fromSelect.appendChild(fromOption);
 
-                    // Approved To warehouse option
-                    const toOption = document.createElement('option');
-                    toOption.value = wh.WarehouseCode;
-                    toOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
-                    if (wh.WarehouseCode === toWarehouse) {
-                        toOption.selected = true;
-                    }
-                    toSelect.appendChild(toOption);
-
-                    // Rejected To warehouse option
-                    const rejectedOption = document.createElement('option');
-                    rejectedOption.value = wh.WarehouseCode;
-                    rejectedOption.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
-                    if (wh.WarehouseCode === rejectedToWarehouse) {
-                        rejectedOption.selected = true;
-                    }
-                    rejectedToSelect.appendChild(rejectedOption);
+                    // Add change listener
+                    select.addEventListener('change', function() {
+                        const binSelectName = this.name.replace('warehouse', 'bin');
+                        const binSelect = document.querySelector(`#itemEditForm select[name="${binSelectName}"]`);
+                        if (binSelect) {
+                            loadModalBins(this.value, binSelect);
+                        }
+                    });
                 });
-
-                // Load bins for all warehouses if they're selected
-                if (fromWarehouse) {
-                    loadBinCodesForEdit(fromWarehouse, 'editFromBin', fromBin);
-                }
-                if (toWarehouse) {
-                    loadBinCodesForEdit(toWarehouse, 'editToBin', toBin);
-                }
-                if (rejectedToWarehouse) {
-                    loadBinCodesForEdit(rejectedToWarehouse, 'editToBins', rejectedToBin);
-                }
-            } else {
-                fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-                toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-                rejectedToSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-                console.error('API error:', data.error);
             }
-        })
-        .catch(error => {
-            fromSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-            toSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-            rejectedToSelect.innerHTML = '<option value="">Error loading warehouses</option>';
-            console.error('Error loading warehouses:', error);
         });
 }
 
-function loadWarehousesForEdit(selectedWarehouse) {
-    const select = document.getElementById('editToWarehouse');
-
-    // Show loading state
-    select.disabled = true;
-    select.innerHTML = '<option value="">Loading warehouses...</option>';
-
-    fetch('/grpo-transfer/api/warehouses')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            select.disabled = false;
-
-            if (data.success && data.warehouses) {
-                select.innerHTML = '<option value="">-- Select Warehouse --</option>';
-
-                data.warehouses.forEach(wh => {
-                    const option = document.createElement('option');
-                    option.value = wh.WarehouseCode;
-                    option.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
-                    if (wh.WarehouseCode === selectedWarehouse) {
-                        option.selected = true;
-                    }
-                    select.appendChild(option);
-                });
-
-                // If warehouse is selected, load bins
-                if (selectedWarehouse) {
-                    loadBinCodesForEdit(selectedWarehouse, null);
-                }
-            } else {
-                select.innerHTML = '<option value="">Error loading warehouses</option>';
-                console.error('API error:', data.error);
-            }
-        })
-        .catch(error => {
-            select.disabled = false;
-            select.innerHTML = '<option value="">Error loading warehouses</option>';
-            console.error('Error loading warehouses:', error);
-        });
-}
-
-function loadBinCodesForEdit(warehouseCode, binSelectId, selectedBin) {
-    if (!warehouseCode) return;
-
-    const select = document.getElementById(binSelectId);
-    if (!select) return;
-
-    // Show loading state
-    select.disabled = true;
-    select.innerHTML = '<option value="">Loading bin codes...</option>';
-
+function loadModalBins(warehouseCode, binSelect, selectedBin = '') {
+    if (!warehouseCode) {
+        binSelect.innerHTML = '<option value="">-- Select Bin --</option>';
+        return;
+    }
+    
+    binSelect.innerHTML = '<option value="">Loading...</option>';
     fetch(`/grpo-transfer/api/bin-codes/${warehouseCode}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            select.disabled = false;
-
-            if (data.success && data.bins) {
-                select.innerHTML = '<option value="">-- Select Bin --</option>';
-
+            if (data.success) {
+                binSelect.innerHTML = '<option value="">-- Select Bin --</option>';
                 data.bins.forEach(bin => {
                     const option = document.createElement('option');
                     option.value = bin.BinCode;
                     option.textContent = bin.BinCode;
-                    option.dataset.absEntry = bin.AbsEntry;
                     if (bin.BinCode === selectedBin) {
                         option.selected = true;
                     }
-                    select.appendChild(option);
+                    binSelect.appendChild(option);
                 });
-            } else {
-                select.innerHTML = '<option value="">Error loading bin codes</option>';
-                console.error('API error:', data.error);
             }
-        })
-        .catch(error => {
-            select.disabled = false;
-            select.innerHTML = '<option value="">Error loading bin codes</option>';
-            console.error('Error loading bin codes:', error);
+        });
+}
+
+function loadWarehousesForQC() {
+    const warehouseSelects = document.querySelectorAll('#qcItemsContainer select[name^="to_warehouse_"], #qcItemsContainer select[name^="rejected_warehouse_"], #qcItemsContainer select[name^="from_warehouse_"]');
+    
+    fetch('/grpo-transfer/api/warehouses')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                warehouseSelects.forEach(select => {
+                    const initialValue = select.dataset.initialValue;
+                    select.innerHTML = '<option value="">-- Select Warehouse --</option>';
+                    data.warehouses.forEach(wh => {
+                        const option = document.createElement('option');
+                        option.value = wh.WarehouseCode;
+                        option.textContent = `${wh.WarehouseCode} - ${wh.WarehouseName}`;
+                        if (wh.WarehouseCode === initialValue) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    
+                    // Trigger bin load if initial value exists
+                    if (initialValue) {
+                        let binSelectName;
+                        if (select.name.startsWith('to_warehouse_')) {
+                            binSelectName = select.name.replace('to_warehouse_', 'to_bin_');
+                        } else if (select.name.startsWith('rejected_warehouse_')) {
+                            binSelectName = select.name.replace('rejected_warehouse_', 'rejected_bin_');
+                        } else if (select.name.startsWith('from_warehouse_')) {
+                            binSelectName = select.name.replace('from_warehouse_', 'from_bin_');
+                        }
+                        
+                        const binSelect = document.querySelector(`#qcItemsContainer select[name="${binSelectName}"]`);
+                        if (binSelect) {
+                            loadBinsForQC(initialValue, binSelect, binSelect.dataset.initialValue);
+                        }
+                    }
+
+                    // Add change listener
+                    select.addEventListener('change', function() {
+                        let binSelectName;
+                        if (this.name.startsWith('to_warehouse_')) {
+                            binSelectName = this.name.replace('to_warehouse_', 'to_bin_');
+                        } else if (this.name.startsWith('rejected_warehouse_')) {
+                            binSelectName = this.name.replace('rejected_warehouse_', 'rejected_bin_');
+                        } else if (this.name.startsWith('from_warehouse_')) {
+                            binSelectName = this.name.replace('from_warehouse_', 'from_bin_');
+                        }
+                        
+                        const binSelect = document.querySelector(`#qcItemsContainer select[name="${binSelectName}"]`);
+                        if (binSelect) {
+                            loadBinsForQC(this.value, binSelect);
+                        }
+                    });
+                });
+            }
+        });
+}
+
+function loadBinsForQC(warehouseCode, binSelect, selectedBin = '') {
+    if (!warehouseCode) {
+        binSelect.innerHTML = '<option value="">-- Select Bin --</option>';
+        return;
+    }
+    
+    binSelect.innerHTML = '<option value="">Loading...</option>';
+    fetch(`/grpo-transfer/api/bin-codes/${warehouseCode}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                binSelect.innerHTML = '<option value="">-- Select Bin --</option>';
+                data.bins.forEach(bin => {
+                    const option = document.createElement('option');
+                    option.value = bin.BinCode;
+                    option.textContent = bin.BinCode;
+                    if (bin.BinCode === selectedBin) {
+                        option.selected = true;
+                    }
+                    binSelect.appendChild(option);
+                });
+            }
         });
 }
 
