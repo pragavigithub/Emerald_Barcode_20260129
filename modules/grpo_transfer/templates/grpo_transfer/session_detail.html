@@ -536,17 +536,13 @@ function editItem(itemId) {
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label">Received Qty</label>
-                                <input type="number" class="form-control" value="${item.received_quantity}" disabled>
-                            </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label">Approved Qty</label>
-                                <input type="number" class="form-control" name="approved_qty" value="${item.approved_quantity || 0}">
+                                <input type="number" class="form-control" name="approved_qty" value="${item.approved_quantity || 0}" ${item.is_batch_item ? 'readonly' : ''}>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label">Rejected Qty</label>
-                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}">
+                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" readonly>
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -1592,17 +1588,13 @@ function editItem(itemId) {
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label">Received Qty</label>
-                                <input type="number" class="form-control" value="${item.received_quantity}" disabled>
-                            </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label">Approved Qty</label>
-                                <input type="number" class="form-control" name="approved_qty" value="${item.approved_quantity || 0}">
+                                <input type="number" class="form-control" name="approved_qty" value="${item.approved_quantity || 0}" ${item.is_batch_item ? 'readonly' : ''}>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label">Rejected Qty</label>
-                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}">
+                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" readonly>
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -2025,75 +2017,49 @@ function loadBinsForQC(warehouseCode, binSelect, selectedBin = '') {
 
 function saveItem() {
     if (!currentEditItemId) {
-        alert('No item selected');
-        return;
+        // Fallback: Try to get item_id from form if currentEditItemId is null
+        const formItemId = document.querySelector('#itemEditForm input[name="item_id"]');
+        if (formItemId) {
+            currentEditItemId = formItemId.value;
+        } else {
+            alert('No item selected');
+            return;
+        }
     }
 
-    const approvedQtyEl = document.getElementById('editApprovedQty');
-    const rejectedQtyEl = document.getElementById('editRejectedQty');
-    const statusEl = document.getElementById('editStatus');
-    const fromWarehouseEl = document.getElementById('editFromWarehouse');
-    const fromBinEl = document.getElementById('editFromBin');
-    const toWarehouseEl = document.getElementById('editToWarehouse');
-    const toBinEl = document.getElementById('editToBin');
-    const rejectedToWarehouseEl = document.getElementById('editToWarehouses');
-    const rejectedToBinEl = document.getElementById('editToBins');
-    const notesEl = document.getElementById('editNotes');
-
-    const approvedQty = parseFloat(approvedQtyEl?.value) || 0;
-    const rejectedQty = parseFloat(rejectedQtyEl?.value) || 0;
-    const status = statusEl?.value || 'pending';
-    const fromWarehouse = fromWarehouseEl?.value || '';
-    const fromBin = fromBinEl?.value || '';
-    const toWarehouse = toWarehouseEl?.value || '';
-    const toBin = toBinEl?.value || '';
-    const rejectedToWarehouse = rejectedToWarehouseEl?.value || '';
-    const rejectedToBin = rejectedToBinEl?.value || '';
-    const notes = notesEl?.value || '';
-    const receivedQty = parseFloat(approvedQtyEl?.max) || 0;
-
-    // Validation
-    const errors = [];
-
-    if (approvedQty < 0) {
-        errors.push('Approved quantity cannot be negative');
-    }
-
-    if (rejectedQty < 0) {
-        errors.push('Rejected quantity cannot be negative');
-    }
-
-    if (approvedQty + rejectedQty > receivedQty) {
-        errors.push(`Approved + Rejected (${approvedQty + rejectedQty}) cannot exceed Received (${receivedQty})`);
-    }
-
-    if (status === 'approved' && approvedQty === 0) {
-        errors.push('Cannot mark as approved with 0 approved quantity');
-    }
-
-    if (status === 'rejected' && rejectedQty === 0) {
-        errors.push('Cannot mark as rejected with 0 rejected quantity');
-    }
-
-    if (status !== 'pending' && !fromWarehouse) {
-        errors.push('Please select a source warehouse');
-    }
-
-    if (status !== 'pending' && !fromBin) {
-        errors.push('Please select a source bin code');
-    }
-
-    if (status !== 'pending' && !toWarehouse) {
-        errors.push('Please select a destination warehouse');
-    }
-
-    if (status !== 'pending' && !toBin) {
-        errors.push('Please select a destination bin code');
-    }
-
-    if (errors.length > 0) {
-        alert('Validation errors:\n\n' + errors.join('\n'));
-        return;
+    const form = document.getElementById('itemEditForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    // Basic fields
+    data.approved_quantity = parseFloat(formData.get('approved_qty')) || 0;
+    data.rejected_quantity = parseFloat(formData.get('rejected_qty')) || 0;
+    data.qc_status = formData.get('qc_status');
+    data.from_warehouse = formData.get('from_warehouse');
+    data.from_bin_code = formData.get('from_bin');
+    data.to_warehouse = formData.get('to_warehouse');
+    data.to_bin_code = formData.get('to_bin');
+    data.rejected_to_warehouse = formData.get('rejected_to_warehouse');
+    data.rejected_to_bin_code = formData.get('rejected_to_bin');
+    data.qc_notes = formData.get('qc_notes');
+    
+    // Batch fields
+    const batches = [];
+    form.querySelectorAll('input[name^="batch_approved_"]').forEach(input => {
+        const batchId = input.name.replace('batch_approved_', '');
+        batches.push({
+            id: batchId,
+            approved_quantity: parseFloat(input.value) || 0,
+            rejected_quantity: parseFloat(form.querySelector(`input[name="batch_rejected_${batchId}"]`).value) || 0,
+            qc_status: form.querySelector(`select[name="batch_status_${batchId}"]`).value
+        });
+    });
+    
+    if (batches.length > 0) {
+        data.batches = batches;
+        // Total approved/rejected quantity is the sum of batches
+        data.approved_quantity = batches.reduce((sum, b) => sum + b.approved_quantity, 0);
+        data.rejected_quantity = batches.reduce((sum, b) => sum + b.rejected_quantity, 0);
     }
 
     const saveBtn = document.getElementById('saveItemBtn');
@@ -2102,48 +2068,25 @@ function saveItem() {
 
     fetch(`/grpo-transfer/api/item/${currentEditItemId}`, {
         method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            approved_quantity: approvedQty,
-            rejected_quantity: rejectedQty,
-            qc_status: status,
-            from_warehouse: fromWarehouse,
-            from_bin_code: fromBin,
-            to_warehouse: toWarehouse,
-            to_bin_code: toBin,
-            approved_to_warehouse: toWarehouse,
-            approved_to_bin_code: toBin,
-            rejected_to_warehouse: rejectedToWarehouse,
-            rejected_to_bin_code: rejectedToBin,
-            qc_notes: notes
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = 'Save Changes';
-
-        if (data.success) {
-            alert('Item updated successfully!');
-            // Close modal and refresh page
-            const modal = bootstrap.Modal.getInstance(document.getElementById('itemEditModal'));
-            modal.hide();
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('Item updated successfully');
             location.reload();
         } else {
-            alert('Error: ' + (data.error || 'Failed to update item'));
-            console.error('API error:', data);
+            alert('Error: ' + result.error);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Save Changes';
         }
     })
     .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving item');
         saveBtn.disabled = false;
         saveBtn.innerHTML = 'Save Changes';
-        console.error('Error:', error);
-        alert('Error saving item: ' + error.message);
     });
 }
 

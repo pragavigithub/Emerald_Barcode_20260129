@@ -1481,100 +1481,40 @@ def update_item(item_id):
 
         data = request.get_json() or {}
         sap = SAPIntegration()
-        # # ==============================================================
-        # # STEP 1: Validate Item Type when Warehouse is edited
-        # # ==============================================================
-        # if 'to_warehouse' in data or 'from_warehouse' in data:
-        #     sap = SAPIntegration()
-        #
-        #     if not sap.ensure_logged_in():
-        #         return jsonify({
-        #             'success': False,
-        #             'error': 'SAP B1 authentication failed'
-        #         }), 500
-        #
-        #     logger.info(
-        #         f"Validating item {item.item_code} "
-        #         f"(DocEntry {item.sap_base_entry}, Line {item.sap_base_line})"
-        #     )
-        #
-        #     # ---------- Item validation ----------
-        #     val_url = f"{sap.base_url}/b1s/v1/SQLQueries('ItemCode_Batch_Serial_Val')/List"
-        #     val_payload = {
-        #         "ParamList": f"itemCode='{item.item_code}'"
-        #     }
-        #
-        #     val_response = sap.session.post(
-        #         val_url,
-        #         json=val_payload,
-        #         headers={'Prefer': 'odata.maxpagesize=0'},
-        #         timeout=30
-        #     )
-        #
-        #     if val_response.status_code == 200:
-        #         val_data = val_response.json().get('value', [])
-        #
-        #         if val_data:
-        #             info = val_data[0]
-        #             is_batch = info.get('BatchNum') == 'Y'
-        #             is_serial = info.get('SerialNum') == 'Y'
-        #
-        #             item.is_batch_item = is_batch
-        #             item.is_serial_item = is_serial
-        #             item.is_non_managed = not is_batch and not is_serial
-        #
-        #             logger.info(
-        #                 f"Item {item.item_code} -> "
-        #                 f"Batch:{is_batch}, Serial:{is_serial}"
-        #             )
-        #
-        #             # ==================================================
-        #             # STEP 2: Fetch Batch Details (if batch-managed)
-        #             # ==================================================
-        #             if is_batch:
-        #                 batch_url = f"{sap.base_url}/b1s/v1/SQLQueries('Get_Batch_By_DocEntry_ItemCode')/List"
-        #                 param_list = (
-        #                     f"docEntry='{item.sap_base_entry}'&"
-        #                     f"itemCode='{item.item_code}'&"
-        #                     f"lineNum='{item.sap_base_line}'"
-        #                 )
-        #
-        #                 batch_response = sap.session.post(
-        #                     batch_url,
-        #                     json={"ParamList": param_list},
-        #                     headers={'Prefer': 'odata.maxpagesize=0'},
-        #                     timeout=30
-        #                 )
-        #
-        #                 # Clear existing batches
-        #                 GRPOTransferBatch.query.filter_by(
-        #                     item_id=item.id
-        #                 ).delete()
-        #
-        #                 if batch_response.status_code == 200:
-        #                     batches = batch_response.json().get('value', [])
-        #
-        #                     for b in batches:
-        #                         batch_no = b.get('BatchNum')
-        #                         if not batch_no:
-        #                             continue
-        #
-        #                         batch = GRPOTransferBatch(
-        #                             item_id=item.id,
-        #                             batch_number=batch_no,
-        #                             batch_quantity=float(b.get('Quantity', 0)),
-        #                             approved_quantity=0,
-        #                             rejected_quantity=0,
-        #                             qc_status='pending'
-        #                         )
-        #
-        #                         if b.get('ExpDate'):
-        #                             batch.expiry_date = datetime.strptime(
-        #                                 b['ExpDate'], '%Y%m%d'
-        #                             ).date()
-        #
-        #                         if b.get('MnfDate'):
-        #                             batch.manufacture_date = datetime.strptime(
+        # ==============================================================
+        # STEP 1: Update Item and Batches
+        # ==============================================================
+        item.approved_quantity = float(data.get('approved_quantity', 0))
+        item.rejected_quantity = float(data.get('rejected_quantity', 0))
+        item.qc_status = data.get('qc_status', 'pending')
+        item.qc_notes = data.get('qc_notes', '')
+        
+        # Warehouse and Bin updates
+        if 'from_warehouse' in data: item.from_warehouse = data['from_warehouse']
+        if 'from_bin_code' in data: item.from_bin_code = data['from_bin_code']
+        if 'to_warehouse' in data: item.to_warehouse = data['to_warehouse']
+        if 'to_bin_code' in data: item.to_bin_code = data['to_bin_code']
+        if 'rejected_to_warehouse' in data: item.rejected_to_warehouse = data['rejected_to_warehouse']
+        if 'rejected_to_bin_code' in data: item.rejected_to_bin_code = data['rejected_to_bin_code']
+        
+        # Approved/Rejected designated fields
+        if 'approved_to_warehouse' in data: item.approved_to_warehouse = data['approved_to_warehouse']
+        if 'approved_to_bin_code' in data: item.approved_to_bin_code = data['approved_to_bin_code']
+        
+        # Batch updates
+        if 'batches' in data:
+            for b_data in data['batches']:
+                batch = GRPOTransferBatch.query.get(b_data['id'])
+                if batch:
+                    batch.approved_quantity = float(b_data.get('approved_quantity', 0))
+                    batch.rejected_quantity = float(b_data.get('rejected_quantity', 0))
+                    batch.qc_status = b_data.get('qc_status', 'pending')
+        
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
         #                                 b['MnfDate'], '%Y%m%d'
         #                             ).date()
         #
