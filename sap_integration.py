@@ -150,6 +150,30 @@ class SAPIntegration:
                 'manage_method': 'N'
             }
 
+    def get_warehouses_list(self):
+        """Get all warehouses from SAP B1"""
+        if not self.ensure_logged_in():
+            logging.warning("SAP B1 not available, returning empty warehouse list")
+            return {'success': False, 'warehouses': [], 'error': 'SAP B1 connection unavailable'}
+
+        try:
+            url = f"{self.base_url}/b1s/v1/Warehouses?$select=WarehouseName,WarehouseCode"
+            headers = {"Prefer": "odata.maxpagesize=0"}
+            response = self.session.get(url, headers=headers, timeout=30)
+            logging.info("🔍 Fetching warehouses list from SAP")
+
+            if response.status_code == 200:
+                data = response.json()
+                warehouses = data.get('value', [])
+                logging.info(f"✅ Retrieved {len(warehouses)} warehouses from SAP")
+                return {'success': True, 'warehouses': warehouses}
+            else:
+                logging.warning(f"Failed to get warehouses: {response.status_code} - {response.text}")
+                return {'success': False, 'warehouses': [], 'error': f'SAP API error: {response.status_code}'}
+        except Exception as e:
+            logging.error(f"Error fetching warehouses: {str(e)}")
+            return {'success': False, 'warehouses': [], 'error': str(e)}
+
     def get_inventory_transfer_request(self, doc_num):
         """Get specific inventory transfer request from SAP B1"""
         if not self.ensure_logged_in():

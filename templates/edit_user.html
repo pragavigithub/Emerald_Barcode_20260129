@@ -2,6 +2,63 @@
 
 {% block title %}Edit User - WMS{% endblock %}
 
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+
+    // Load warehouses
+    function loadWarehouses() {
+        $.get('/api/get-warehouses', function(response) {
+            if (response.success) {
+                $('.warehouse-select').each(function() {
+                    const currentVal = $(this).val();
+                    $(this).empty().append('<option value="">-- Select Warehouse --</option>');
+                    response.warehouses.forEach(function(wh) {
+                        const selected = wh.WarehouseCode === currentVal ? 'selected' : '';
+                        $(this).append(`<option value="${wh.WarehouseCode}" ${selected}>${wh.WarehouseCode} - ${wh.WarehouseName}</option>`);
+                    }.bind(this));
+                    $(this).trigger('change');
+                });
+            }
+        });
+    }
+
+    // Load bins for a warehouse
+    function loadBins(warehouseCode, binSelectId, currentBinVal) {
+        if (!warehouseCode) {
+            $(`#${binSelectId}`).empty().append('<option value="">-- Select Bin --</option>').trigger('change');
+            return;
+        }
+
+        $.get(`/api/get-bins?warehouse=${warehouseCode}`, function(response) {
+            if (response.success) {
+                const binSelect = $(`#${binSelectId}`);
+                binSelect.empty().append('<option value="">-- Select Bin --</option>');
+                response.bins.forEach(function(bin) {
+                    const selected = bin.BinCode === currentBinVal ? 'selected' : '';
+                    binSelect.append(`<option value="${bin.BinCode}" ${selected}>${bin.BinCode}</option>`);
+                });
+                binSelect.trigger('change');
+            }
+        });
+    }
+
+    $('.warehouse-select').on('change', function() {
+        const binSelectId = $(this).attr('id').replace('warehouse', 'bin');
+        const warehouseCode = $(this).val();
+        const currentBinVal = $(`#${binSelectId}`).val();
+        loadBins(warehouseCode, binSelectId, currentBinVal);
+    });
+
+    loadWarehouses();
+});
+</script>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-md-8 offset-md-2">
@@ -159,15 +216,35 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <label class="form-label">Approved Warehouse</label>
-                                <input type="text" class="form-control mb-2" name="approved_warehouse" value="{{ user.approved_warehouse or '' }}" placeholder="Approved WH">
+                                <select class="form-select mb-2 select2 warehouse-select" name="approved_warehouse" id="approved_warehouse" data-placeholder="Select Approved WH">
+                                    <option value="">-- Select Warehouse --</option>
+                                    {% if user.approved_warehouse %}
+                                    <option value="{{ user.approved_warehouse }}" selected>{{ user.approved_warehouse }}</option>
+                                    {% endif %}
+                                </select>
                                 <label class="form-label">Approved Bin</label>
-                                <input type="text" class="form-control" name="approved_bin" value="{{ user.approved_bin or '' }}" placeholder="Approved Bin">
+                                <select class="form-select select2 bin-select" name="approved_bin" id="approved_bin" data-placeholder="Select Approved Bin">
+                                    <option value="">-- Select Bin --</option>
+                                    {% if user.approved_bin %}
+                                    <option value="{{ user.approved_bin }}" selected>{{ user.approved_bin }}</option>
+                                    {% endif %}
+                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Rejected Warehouse</label>
-                                <input type="text" class="form-control mb-2" name="rejected_warehouse" value="{{ user.rejected_warehouse or '' }}" placeholder="Rejected WH">
+                                <select class="form-select mb-2 select2 warehouse-select" name="rejected_warehouse" id="rejected_warehouse" data-placeholder="Select Rejected WH">
+                                    <option value="">-- Select Warehouse --</option>
+                                    {% if user.rejected_warehouse %}
+                                    <option value="{{ user.rejected_warehouse }}" selected>{{ user.rejected_warehouse }}</option>
+                                    {% endif %}
+                                </select>
                                 <label class="form-label">Rejected Bin</label>
-                                <input type="text" class="form-control" name="rejected_bin" value="{{ user.rejected_bin or '' }}" placeholder="Rejected Bin">
+                                <select class="form-select select2 bin-select" name="rejected_bin" id="rejected_bin" data-placeholder="Select Rejected Bin">
+                                    <option value="">-- Select Bin --</option>
+                                    {% if user.rejected_bin %}
+                                    <option value="{{ user.rejected_bin }}" selected>{{ user.rejected_bin }}</option>
+                                    {% endif %}
+                                </select>
                             </div>
                         </div>
                     </div>
