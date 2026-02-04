@@ -542,7 +542,7 @@ function editItem(itemId) {
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Rejected Qty</label>
-                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" readonly>
+                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" ${item.is_batch_item ? 'readonly' : ''}>
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -1594,7 +1594,7 @@ function editItem(itemId) {
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Rejected Qty</label>
-                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" readonly>
+                                <input type="number" class="form-control" name="rejected_qty" value="${item.rejected_quantity || 0}" ${item.is_batch_item ? 'readonly' : ''}>
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -1612,13 +1612,13 @@ function editItem(itemId) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">From Warehouse</label>
-                                <select class="form-select" name="from_warehouse" data-initial-value="${item.from_warehouse || ''}">
+                                <select class="form-select" name="from_warehouse" data-initial-value="${item.from_warehouse || ''}" disabled>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">From Bin Code</label>
-                                <select class="form-select" name="from_bin" data-initial-value="${item.from_bin_code || ''}">
+                                <select class="form-select" name="from_bin" data-initial-value="${item.from_bin_code || ''}" disabled>
                                     <option value="">-- Select Bin --</option>
                                 </select>
                             </div>

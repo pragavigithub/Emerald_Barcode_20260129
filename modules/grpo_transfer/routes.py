@@ -1490,17 +1490,35 @@ def update_item(item_id):
         item.qc_notes = data.get('qc_notes', '')
         
         # Warehouse and Bin updates
-        if 'from_warehouse' in data: item.from_warehouse = data['from_warehouse']
-        if 'from_bin_code' in data: item.from_bin_code = data['from_bin_code']
+        # if 'from_warehouse' in data: item.from_warehouse = data['from_warehouse']
+        # if 'from_bin_code' in data: item.from_bin_code = data['from_bin_code']
         if 'to_warehouse' in data: item.to_warehouse = data['to_warehouse']
         if 'to_bin_code' in data: item.to_bin_code = data['to_bin_code']
+        if 'to_warehouse' in data: item.approved_to_warehouse = data['to_warehouse']
+        if 'to_bin_code' in data: item.approved_to_bin_code = data['to_bin_code']
         if 'rejected_to_warehouse' in data: item.rejected_to_warehouse = data['rejected_to_warehouse']
         if 'rejected_to_bin_code' in data: item.rejected_to_bin_code = data['rejected_to_bin_code']
         
         # Approved/Rejected designated fields
-        if 'approved_to_warehouse' in data: item.approved_to_warehouse = data['approved_to_warehouse']
-        if 'approved_to_bin_code' in data: item.approved_to_bin_code = data['approved_to_bin_code']
-        
+        # if 'approved_to_warehouse' in data: item.approved_to_warehouse = data['approved_to_warehouse']
+        # if 'approved_to_bin_code' in data: item.approved_to_bin_code = data['approved_to_bin_code']
+
+        if 'to_bin_code' in data:
+            item.approved_to_bin_code = data['to_bin_code']
+            print("item.approved_to_bin_code0--",item.approved_to_bin_code)
+            binDetails = sap.get_bins_By_Bincode(item.approved_to_bin_code)
+        #if 'approved_to_bin_abs_entry' in data:
+        if binDetails and isinstance(binDetails, list):
+            bin_row = binDetails[0]  # take first record
+            item.approved_to_bin_abs_entry = bin_row.get("AbsEntry")
+        if 'rejected_to_bin_code' in data:
+            item.rejected_to_bin_code = data['rejected_to_bin_code']
+            binDetails = sap.get_bins_By_Bincode(item.rejected_to_bin_code)
+            # if 'rejected_to_bin_abs_entry' in data:
+        if binDetails and isinstance(binDetails, list):
+            bin_row = binDetails[0]  # take first record
+            print("bin_row->", bin_row)
+            item.rejected_to_bin_abs_entry = bin_row.get("AbsEntry")
         # Batch updates
         if 'batches' in data:
             for b_data in data['batches']:
