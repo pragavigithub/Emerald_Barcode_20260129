@@ -250,7 +250,7 @@ class InventoryTransferRequestLine(db.Model):
     remaining_open_quantity = db.Column(db.Float, nullable=True)  # SAP RemainingOpenInventoryQuantity
     line_status = db.Column(db.String(20), nullable=True)  # SAP LineStatus (bost_Open, bost_Close)
     uom_code = db.Column(db.String(20), nullable=True)  # SAP UoMCode
-    
+    grn_id = db.Column(db.String(200), nullable=True)  # doc grn_id
     # WMS tracking fields
     transferred_quantity = db.Column(db.Float, default=0)  # Quantity transferred in WMS
     wms_remaining_quantity = db.Column(db.Float, nullable=True)  # Calculated remaining after WMS transfers

@@ -2155,6 +2155,7 @@ def inventory_transfer_detail(transfer_id):
                 item_code = payload.get("item_code", "").strip()
                 item_name = payload.get("item_name", "").strip()
                 quantity = float(payload.get("quantity", 0))
+                print("valaueScan QTY/\/\/\-->",quantity)
                 from_whs = payload.get("from_warehouse", "").strip()
                 to_whs = payload.get("to_warehouse", "").strip()
                 from_bin = payload.get("from_bin", "").strip()
@@ -2182,13 +2183,32 @@ def inventory_transfer_detail(transfer_id):
                         #print("item_details--+++",item_details)
                         actual_uom = item_details.get("InventoryUoM") if item_details else None
                         #print("actual_uom---->",actual_uom)
+                        # InventoryTransferRequestLine.query.filter(
+                        #     InventoryTransferRequestLine.inventory_transfer_id == transfer.id,
+                        #     InventoryTransferRequestLine.item_code == itemType.get("item_code"),
+                        #     grn_id=GRN_id
+                        # ).update(
+                        #     {InventoryTransferRequestLine.grn_id: GRN_id},
+                        #     synchronize_session=False
+                        # )
+
+                        #db.session.commit()
+
                         docDetails = InventoryTransferRequestLine.query.filter_by(
                             inventory_transfer_id=transfer.id,
                             item_code=itemType.get("item_code")
+                            #,grn_id = GRN_id
                         ).first()
                     # Insert new record
                     remaining_qqty = docDetails.remaining_open_quantity - quantity;
-                if docDetails.quantity < quantity :
+                # Scanned_Data = TransferScanState.query.filter_by(
+                #     grn_id=GRN_id,
+                #     transfer_id = transfer.id,
+                #     item_code=itemType.get("item_code")
+                #     # ,grn_id = GRN_id
+                # ).first()
+                # print("{}{}{}{}{}====>",Scanned_Data.qty)
+                if docDetails.quantity <= quantity :
 
                     new_item = InventoryTransferItem(
                         inventory_transfer_id=transfer.id,
@@ -2196,7 +2216,7 @@ def inventory_transfer_detail(transfer_id):
                         item_name=itemType.get("item_name"),
                         quantity=quantity,
                         grn_id=GRN_id,  # 🔥 Stored here
-                        transferred_quantity=docDetails.quantity,
+                        transferred_quantity=quantity,
                         remaining_quantity=remaining_qqty,
                         unit_of_measure=docDetails.uom_code,
                         from_warehouse_code=docDetails.from_warehouse_code,
@@ -2230,7 +2250,7 @@ def inventory_transfer_detail(transfer_id):
                     # update all scanned lines
                     TransferScanState.query.filter(
                         TransferScanState.transfer_id == transfer.id,
-                        TransferScanState.transfer_status == 'pending'
+                        TransferScanState.transfer_status == 'verified'
                     ).update(
                         {TransferScanState.transfer_status: 'verified'},
                         synchronize_session=False
@@ -2432,7 +2452,7 @@ def inventory_transfer_detail(transfer_id):
                 # ======================================================
                 TransferScanState.query.filter(
                     TransferScanState.transfer_id == transfer.id,
-                    TransferScanState.transfer_status == 'pending'
+                    TransferScanState.transfer_status == 'verified'
                 ).update(
                     {TransferScanState.transfer_status: 'verified'},
                     synchronize_session=False

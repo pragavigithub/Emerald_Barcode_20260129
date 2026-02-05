@@ -6,7 +6,7 @@ from datetime import datetime
 import urllib.parse
 import urllib3
 
-from models import InventoryTransferItem, TransferScanState
+from models import InventoryTransferItem, TransferScanState, InventoryTransferRequestLine
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -2201,6 +2201,7 @@ class SAPIntegration:
         transfer_request_data = self.get_inventory_transfer_request(
             transfer_document.transfer_request_number
         )
+
         base_entry = transfer_request_data.get('DocEntry') if transfer_request_data else None
 
         stock_transfer_lines = []
@@ -2209,7 +2210,11 @@ class SAPIntegration:
         # LOOP ALL TRANSFER ITEMS
         # -------------------------------------------------------
         for index, item in enumerate(transfer_document.items):
-
+            docDetails = InventoryTransferRequestLine.query.filter_by(
+                inventory_transfer_id=transfer_document.id,
+                item_code=item.item_code
+                # ,grn_id = GRN_id
+            ).first()
             # Fetch item master data
             item_details = self.get_item_details(item.item_code)
             actual_uom = item_details.get("InventoryUoM",
@@ -2223,7 +2228,7 @@ class SAPIntegration:
 
             if transfer_request_data and 'StockTransferLines' in transfer_request_data:
                 for req_line in transfer_request_data['StockTransferLines']:
-                    if req_line.get("ItemCode") == item.item_code:
+                    if req_line.get("ItemCode") == item.item_code and req_line.get("LineNum") == index :
                         base_line = req_line.get("LineNum", index)
                         price = req_line.get("Price", 0)
                         unit_price = req_line.get("UnitPrice", price)
