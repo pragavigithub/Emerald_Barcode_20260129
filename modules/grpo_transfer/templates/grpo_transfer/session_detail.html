@@ -560,7 +560,7 @@ function editItem(itemId) {
                         <div class="row mb-3" style="display:none;">
                             <div class="col-md-6">
                                 <label class="form-label">From Warehouse</label>
-                                <select class="form-select" name="from_warehouse" data-initial-value="${item.from_warehouse || ''}">
+                                <select class="form-select" name="from_warehouse" data-initial-value="${item.from_warehouse || ''}" required>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
@@ -577,7 +577,7 @@ function editItem(itemId) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">To Warehouse</label>
-                                <select class="form-select" name="to_warehouse" data-initial-value="${initialApprovedWh}">
+                                <select class="form-select" name="to_warehouse" data-initial-value="${initialApprovedWh}" required>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
@@ -593,7 +593,7 @@ function editItem(itemId) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">To Warehouse</label>
-                                <select class="form-select" name="rejected_to_warehouse" data-initial-value="${initialRejectedWh}">
+                                <select class="form-select" name="rejected_to_warehouse" data-initial-value="${initialRejectedWh}" required>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
@@ -1632,13 +1632,13 @@ function editItem(itemId) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">To Warehouse</label>
-                                <select class="form-select" name="to_warehouse" data-initial-value="${initialApprovedWh}">
+                                <select class="form-select" name="to_warehouse" data-initial-value="${initialApprovedWh}" required>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">To Bin Code</label>
-                                <select class="form-select" name="to_bin" data-initial-value="${initialApprovedBin}">
+                                <select class="form-select" name="to_bin" data-initial-value="${initialApprovedBin}" required>
                                     <option value="">-- Select Bin --</option>
                                 </select>
                             </div>
@@ -1648,13 +1648,13 @@ function editItem(itemId) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">To Warehouse</label>
-                                <select class="form-select" name="rejected_to_warehouse" data-initial-value="${initialRejectedWh}">
+                                <select class="form-select" name="rejected_to_warehouse" data-initial-value="${initialRejectedWh}" required>
                                     <option value="">-- Select Warehouse --</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">To Bin Code</label>
-                                <select class="form-select" name="rejected_to_bin" data-initial-value="${initialRejectedBin}">
+                                <select class="form-select" name="rejected_to_bin" data-initial-value="${initialRejectedBin}" required>
                                     <option value="">-- Select Bin --</option>
                                 </select>
                             </div>

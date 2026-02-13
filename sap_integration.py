@@ -986,6 +986,63 @@ class SAPIntegration:
             logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
             return None
 
+    def get_sales_order_by_doc_entry_i(self, doc_entry):
+            """Get Sales Order details from SAP B1 using DocEntry - only open documents and open lines (CrossJoin)"""
+            if not self.ensure_logged_in():
+                logging.warning("SAP B1 not available, returning None")
+                return None
+
+            try:
+                url = (
+                    f"{self.base_url}/b1s/v1/$crossjoin(Orders,Orders/DocumentLines)"
+                    f"?$expand="
+                    f"Orders($select=DocEntry,DocNum,CardCode,CardName,DocumentStatus,Series,DocDate,DocDueDate,BPL_IDAssignedToInvoice,DocTotal),"
+                    f"Orders/DocumentLines($select=LineNum,ItemCode,ItemDescription,Quantity,"
+                    f"WarehouseCode,LineStatus,RemainingOpenQuantity,UnitPrice)"
+                    f"&$filter="
+                    f"Orders/DocEntry eq Orders/DocumentLines/DocEntry "
+                    f"and Orders/DocEntry eq {doc_entry}"
+                )
+
+                response = self.session.get(url, timeout=30)
+
+                if response.status_code != 200:
+                    logging.warning(f"Failed to get Sales Order by DocEntry {doc_entry}: {response.status_code}")
+                    return None
+
+                data = response.json()
+                values = data.get("value", [])
+
+                if not values:
+                    logging.warning(f"No open Sales Order / lines found for DocEntry: {doc_entry}")
+                    return None
+
+                # 🔹 Build Sales Order header once
+                order_header = values[0]["Orders"]
+                order_header["DocumentLines"] = []
+
+                # 🔹 Collect open lines
+                for row in values:
+                    line = row.get("Orders/DocumentLines")
+                    if line:
+                        order_header["DocumentLines"].append(line)
+
+                if not order_header["DocumentLines"]:
+                    logging.warning(f"Sales Order {doc_entry} has no open lines")
+                    return None
+
+                logging.info(
+                    f"✅ Retrieved SO DocEntry: {doc_entry}, "
+                    f"DocNum: {order_header.get('DocNum')}, "
+                    f"Open Lines: {len(order_header['DocumentLines'])}"
+                )
+
+                return order_header
+
+            except Exception as e:
+                logging.error(f"Error fetching Sales Order by DocEntry {doc_entry}: {str(e)}")
+                return None
+
     def create_delivery_note(self, delivery_data):
         """Create Delivery Note in SAP B1"""
         if not self.ensure_logged_in():
@@ -2221,15 +2278,15 @@ class SAPIntegration:
                                           item.unit_of_measure) if item_details else item.unit_of_measure
 
             # Determine BaseLine from Transfer Request
-            base_line = index
+            base_line = item.sap_line_num
             price = 0
             unit_price = 0
             uom_entry = None
 
             if transfer_request_data and 'StockTransferLines' in transfer_request_data:
                 for req_line in transfer_request_data['StockTransferLines']:
-                    if req_line.get("ItemCode") == item.item_code and req_line.get("LineNum") == index :
-                        base_line = req_line.get("LineNum", index)
+                    if req_line.get("ItemCode") == item.item_code and req_line.get("LineNum") == base_line :
+                        base_line = req_line.get("LineNum", base_line)
                         price = req_line.get("Price", 0)
                         unit_price = req_line.get("UnitPrice", price)
                         uom_entry = req_line.get("UoMEntry")

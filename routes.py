@@ -2176,28 +2176,19 @@ def inventory_transfer_detail(transfer_id):
                     ).first()
                     # SAP Item Lookup
                     print("VALAUAUAUA-------->",exists)
-
+                    parts = GRN_id.split("_")
+                    sap_base_line_num = int(parts[1])
                     if exists == None:
                         item_details = sap.get_item_details(item_code)
                         itemType = sap.validate_item_code(item_code)
                         #print("item_details--+++",item_details)
                         actual_uom = item_details.get("InventoryUoM") if item_details else None
-                        #print("actual_uom---->",actual_uom)
-                        # InventoryTransferRequestLine.query.filter(
-                        #     InventoryTransferRequestLine.inventory_transfer_id == transfer.id,
-                        #     InventoryTransferRequestLine.item_code == itemType.get("item_code"),
-                        #     grn_id=GRN_id
-                        # ).update(
-                        #     {InventoryTransferRequestLine.grn_id: GRN_id},
-                        #     synchronize_session=False
-                        # )
 
-                        #db.session.commit()
 
                         docDetails = InventoryTransferRequestLine.query.filter_by(
                             inventory_transfer_id=transfer.id,
-                            item_code=itemType.get("item_code")
-                            #,grn_id = GRN_id
+                            item_code=itemType.get("item_code"),
+                            line_num = sap_base_line_num
                         ).first()
                     # Insert new record
                     remaining_qqty = docDetails.remaining_open_quantity - quantity;
@@ -2208,7 +2199,8 @@ def inventory_transfer_detail(transfer_id):
                 #     # ,grn_id = GRN_id
                 # ).first()
                 # print("{}{}{}{}{}====>",Scanned_Data.qty)
-                if docDetails.quantity <= quantity :
+
+                if docDetails.quantity >= quantity :
 
                     new_item = InventoryTransferItem(
                         inventory_transfer_id=transfer.id,
@@ -2227,7 +2219,7 @@ def inventory_transfer_detail(transfer_id):
                         to_bin=to_bin,
                         from_bin=from_bin,
                         batch_number=batch_number,
-                        sap_line_num=docDetails.line_num,
+                        sap_line_num=sap_base_line_num,
                         sap_doc_entry=docDetails.sap_doc_entry,
                         line_status=docDetails.line_status,
                         serial_manged=itemType.get("serial_num"),

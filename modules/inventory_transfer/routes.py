@@ -21,7 +21,7 @@ from sap_integration import SAPIntegration
 transfer_bp = Blueprint('inventory_transfer', __name__, 
                          url_prefix='/inventory_transfer',
                          template_folder=str(Path(__file__).resolve().parent / 'templates'))
-
+logger = logging.getLogger(__name__)
 def generate_transfer_number():
     """Generate unique transfer number for serial transfers"""
     while True:
@@ -455,61 +455,255 @@ def submit(transfer_id):
 @login_required
 def qc_approve(transfer_id):
     """QC approve transfer and post to SAP B1"""
+    # try:
+    #     print("itme,-->", transfer_id)
+    #     session = InventoryTransfer.query.get(transfer_id)
+    #     if not session:
+    #         return jsonify({
+    #             'success': False,
+    #             'error': 'Session not found'
+    #         }), 404
+    #
+    #     sap = SAPIntegration()
+    #
+    #     # Ensure logged in
+    #     if not sap.ensure_logged_in():
+    #         return jsonify({
+    #             'success': False,
+    #             'error': 'SAP B1 authentication failed'
+    #         }), 500
+    #
+    #     # Create separate transfers for approved and rejected quantities
+    #     transfers_posted = []
+    #
+    #     # ============================================================================
+    #     # TRANSFER 1: APPROVED QUANTITIES
+    #     # ============================================================================
+    #     approved_transfer = {
+    #         'DocDate': session.doc_date.isoformat(),
+    #         'Comments': f'QC Approved WMS Transfer {session.transfer_request_number} by {session.sap_document_number}',
+    #         'FromWarehouse': session.items[0].from_warehouse_code if session.items else '',
+    #         'ToWarehouse': session.items[0].to_warehouse_code if session.items else '',
+    #         'StockTransferLines': []
+    #     }
+    #     print("approved_transfer",approved_transfer)
+    #     line_num = 0
+    #     line_num = 0
+    #     for item in session.items:
+    #
+    #         # if item.qc_status != 'approved' or item.transferred_quantity <= 0:
+    #         #     print("itemitem------>1", item.batch_required)
+    #         #     continue
+    #
+    #         # Match transfer item to its original request_line using sap_line_num
+    #         # sap_line_num is the original BaseLine from SAP B1
+    #         base_line = item.sap_line_num
+    #
+    #         # Verify the match by finding the request_line with this line_num
+    #         request_line = None
+    #         for req_li in session.request_lines:
+    #             if req_li.line_num == item.sap_line_num and req_li.item_code == item.item_code:
+    #                 request_line = req_li
+    #                 break
+    #
+    #         # Log for debugging
+    #         if request_line:
+    #             print(f"✓ Matched item {item.item_code} to request_line {base_line}")
+    #         else:
+    #             print(f"⚠ Item {item.item_code} with sap_line_num {item.sap_line_num} not found in request_lines")
+    #
+    #         # Handle batch items - ONLY if is_batch_item is True AND batches exist
+    #         if item.batch_required:
+    #             from_bin_abs = sap.get_bin_abs_entry(item.from_bin,
+    #                                                  item.from_warehouse_code
+    #                                                  )
+    #             print("from_bin_abs-->", from_bin_abs)
+    #
+    #             to_bin_abs = sap.get_bin_abs_entry(item.to_bin,
+    #                                                item.to_warehouse_code
+    #                                                )
+    #
+    #             print("to_bin_absto_bin_abs->", to_bin_abs)
+    #             line = {
+    #                 'LineNum': line_num,
+    #                 'ItemCode': item.item_code,
+    #                 'Quantity': item.transferred_quantity,
+    #                 'WarehouseCode': item.to_warehouse_code,
+    #                 'FromWarehouseCode': item.from_warehouse_code,
+    #                 'BaseEntry': item.sap_doc_entry,
+    #                 'BaseLine': base_line,
+    #                 'BaseType': 'PurchaseDeliveryNotes',  # GRPO document type
+    #                 'BatchNumbers': [
+    #                     {
+    #                         'BatchNumber': item.batch_number,
+    #                         'Quantity': item.transferred_quantity,
+    #                         'BaseLineNumber': line_num
+    #                     }
+    #                 ],
+    #                 'StockTransferLinesBinAllocations': []
+    #             }
+    #
+    #             # Add bin allocations if available
+    #             if from_bin_abs:
+    #                 line['StockTransferLinesBinAllocations'].append({
+    #                     'BinActionType': 'batFromWarehouse',
+    #                     'BinAbsEntry': from_bin_abs,
+    #                     'Quantity': item.transferred_quantity,
+    #                     'SerialAndBatchNumbersBaseLine': 0
+    #                 })
+    #
+    #             if to_bin_abs:
+    #                 line['StockTransferLinesBinAllocations'].append({
+    #                     'BinActionType': 'batToWarehouse',
+    #                     'BinAbsEntry': to_bin_abs,
+    #                     'Quantity': item.transferred_quantity,
+    #                     'SerialAndBatchNumbersBaseLine': 0
+    #                 })
+    #
+    #             approved_transfer['StockTransferLines'].append(line)
+    #             line_num += 1
+    #         else:
+    #             # Non-batch items - NO batch numbers
+    #             from_bin_abs = sap.get_bin_abs_entry(item.from_bin,
+    #                                                  item.from_warehouse_code
+    #                                                  )
+    #
+    #             to_bin_abs = sap.get_bin_abs_entry(item.to_bin,
+    #                                                item.to_warehouse_code
+    #                                                )
+    #             line = {
+    #                 'LineNum': line_num,
+    #                 'ItemCode': item.item_code,
+    #                 'Quantity': item.transferred_quantity,
+    #                 'WarehouseCode': item.to_warehouse_code,
+    #                 'FromWarehouseCode': item.from_warehouse_code,
+    #                 'BaseEntry': item.sap_doc_entry,
+    #                 'BaseLine': base_line,
+    #                 'BaseType': 'PurchaseDeliveryNotes',
+    #                 'BatchNumbers': [],  # ✅ CRITICAL: Empty for non-batch items
+    #                 'StockTransferLinesBinAllocations': []
+    #             }
+    #
+    #             # Add bin allocations if available
+    #             if from_bin_abs:
+    #                 line['StockTransferLinesBinAllocations'].append({
+    #                     'BinActionType': 'batFromWarehouse',
+    #                     'BinAbsEntry': from_bin_abs,
+    #                     'Quantity': item.transferred_quantity,
+    #                     'SerialAndBatchNumbersBaseLine': 0
+    #                 })
+    #
+    #             if to_bin_abs:
+    #                 line['StockTransferLinesBinAllocations'].append({
+    #                     'BinActionType': 'batToWarehouse',
+    #                     'BinAbsEntry': to_bin_abs,
+    #                     'Quantity': item.transferred_quantity,
+    #                     'SerialAndBatchNumbersBaseLine': 0
+    #                 })
+    #
+    #             approved_transfer['StockTransferLines'].append(line)
+    #             line_num += 1
+    #
+    #     # Post approved transfer if there are items
+    #     if approved_transfer['StockTransferLines']:
+    #         url = f"{sap.base_url}/b1s/v1/StockTransfers"
+    #         logger.debug(f"Posting approved stock transfer to: {url}")
+    #         logger.debug(f"Approved transfer payload: {json.dumps(approved_transfer, indent=2)}")
+    #         print("approved_transfer-->2", approved_transfer)
+    #         response = sap.session.post(url, json=approved_transfer, timeout=30)
+    #
+    #         if response.status_code in [200, 201]:
+    #             data = response.json()
+    #             session.transfer_doc_entry = data.get('DocEntry')
+    #             session.transfer_doc_num = data.get('DocNum')
+    #             session.status = 'posted'
+    #             transfers_posted.append({
+    #                 'type': 'approved',
+    #                 'doc_entry': data.get('DocEntry'),
+    #                 'doc_num': data.get('DocNum')
+    #             })
+    #
+    #             logger.info(
+    #                 f"✅ Approved stock transfer posted to SAP B1 - DocEntry: {data.get('DocEntry')}, DocNum: {data.get('DocNum')}")
+    #         else:
+    #             logger.error(f"SAP B1 API error: {response.status_code} - {response.text}")
+    #             session.status = response
+    #             return jsonify({
+    #                 'success': False,
+    #                 'error': f'Failed to post approved transfer: {response.status_code}'
+    #             }), 500
+    #
+    #     db.session.commit()
+    #
+    #     return jsonify({
+    #         'success': True,
+    #         'transfers_posted': transfers_posted,
+    #         'message': f'Successfully posted {len(transfers_posted)} transfer(s) to SAP B1'
+    #     })
+    #
+    # except Exception as e:
+    #     logger.error(f"Error posting transfer to SAP: {str(e)}")
+    #     db.session.rollback()
+    #     return jsonify({
+    #         'success': False,
+    #         'error': str(e)
+    #     }), 500
+
     try:
         transfer = InventoryTransfer.query.get_or_404(transfer_id)
-        
+
         # Check QC permissions
         if not current_user.has_permission('qc_dashboard') and current_user.role not in ['admin', 'manager']:
             return jsonify({'success': False, 'error': 'QC permissions required'}), 403
-        
+
         if transfer.status != 'submitted':
             return jsonify({'success': False, 'error': 'Only submitted transfers can be approved'}), 400
-        
+
         # Get QC notes
         qc_notes = request.json.get('qc_notes', '') if request.is_json else request.form.get('qc_notes', '')
-        
+
         # Mark items as approved
         for item in transfer.items:
             item.qc_status = 'approved'
-        
+
         # Update transfer status
         old_status = transfer.status
         transfer.status = 'qc_approved'
         transfer.qc_approver_id = current_user.id
         transfer.qc_approved_at = datetime.utcnow()
         transfer.qc_notes = qc_notes
-        
+
         # Post to SAP B1 as Stock Transfer - MUST succeed for approval
         from sap_integration import SAPIntegration
         sap = SAPIntegration()
-        
+
         logging.info(f"🚀 Posting Inventory Transfer {transfer_id} to SAP B1...")
         sap_result = sap.post_inventory_transfer_to_sap(transfer)
-        
+
         if not sap_result.get('success'):
             # Rollback approval if SAP posting fails
             db.session.rollback()
             sap_error = sap_result.get('error', 'Unknown SAP error')
             logging.error(f"❌ SAP B1 posting failed: {sap_error}")
             return jsonify({'success': False, 'error': f'SAP B1 posting failed: {sap_error}'}), 500
-        
+
         # SAP posting succeeded - update with document number
         transfer.sap_document_number = sap_result.get('document_number')
         transfer.status = 'posted'
         logging.info(f"✅ Successfully posted to SAP B1: {transfer.sap_document_number}")
-        
+
         db.session.commit()
-        
+
         # Log status change
         log_status_change(transfer_id, old_status, 'posted', current_user.id, f'Transfer QC approved and posted to SAP B1 as {transfer.sap_document_number}')
-        
+
         logging.info(f"✅ Inventory Transfer {transfer_id} QC approved and posted to SAP B1")
         return jsonify({
             'success': True,
             'message': f'Transfer QC approved and posted to SAP B1 as {transfer.sap_document_number}',
             'sap_document_number': transfer.sap_document_number
         })
-        
+
     except Exception as e:
         logging.error(f"Error approving transfer: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -694,6 +888,20 @@ def add_transfer_item(transfer_id):
                 from_bin = scanned_packs[0].bin_location
         
         # Create new transfer item
+        # Look up the sap_line_num from request_lines for this item
+        sap_line_num = None
+        sap_doc_entry = None
+        line_status = None
+        
+        transfer = InventoryTransfer.query.get(transfer_id)
+        if transfer and transfer.request_lines:
+            for req_line in transfer.request_lines:
+                if req_line.item_code == item_code:
+                    sap_line_num = req_line.line_num
+                    sap_doc_entry = req_line.sap_doc_entry
+                    line_status = req_line.line_status
+                    break
+        
         transfer_item = InventoryTransferItem(
             transfer_id=transfer_id,
             item_code=item_code,
@@ -706,7 +914,11 @@ def add_transfer_item(transfer_id):
             to_bin=to_bin,
             batch_number=batch_number,
             scanned_batches=scanned_batches_json,
-            qc_status='pending'
+            qc_status='pending',
+            # SAP Line Fields
+            sap_line_num=sap_line_num,
+            sap_doc_entry=sap_doc_entry,
+            line_status=line_status
         )
         
         db.session.add(transfer_item)
@@ -2455,7 +2667,7 @@ def api_scan_qr_label():
 
         # =========================================================
         # 🔥 NEW FEATURE: CHECK IF SAME GRN ALREADY SCANNED
-        # =========================================================
+        # =============agatheesh============================================
         existing_grn = TransferScanState.query.filter_by(
             transfer_id=transfer_id,
             item_code=item_code,

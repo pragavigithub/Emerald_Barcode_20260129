@@ -173,6 +173,7 @@ def create():
             return redirect(url_for('sales_delivery.index'))
         
         logging.info(f"📥 Loading SO data for DocEntry: {doc_entry}")
+        print("kekekek")
         so_data = sap.get_sales_order_by_doc_entry(doc_entry)
         
         if not so_data:
@@ -254,7 +255,8 @@ def detail(delivery_id):
         return redirect(url_for('sales_delivery.index'))
 
     sap = SAPIntegration()
-    so_data = sap.get_sales_order_by_doc_entry(delivery.so_doc_entry)
+    print("KEYEY")
+    so_data = sap.get_sales_order_by_doc_entry_i(delivery.so_doc_entry)
 
     if not so_data:
         if request.headers.get(
